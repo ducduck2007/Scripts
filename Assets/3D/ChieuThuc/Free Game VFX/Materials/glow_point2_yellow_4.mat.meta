@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1e39723b4afcc9e49aca8c95a4fcc618
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: fx_textures_glow_materials.unity3d
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 345212
+  packageName: Free Game VFX Collection
+  packageVersion: 1.0
+  assetPath: Assets/Free Game VFX/Materials/glow_point2_yellow_4.mat
+  uploadId: 820232

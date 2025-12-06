@@ -1,0 +1,33 @@
+{
+"skeleton": { "hash": "nfACLJ8luUHdkrrnqHWzZOu+k3s", "spine": "3.7.94", "width": 128, "height": 128, "images": "./Images/", "audio": "" },
+"bones": [
+	{ "name": "root" },
+	{ "name": "loading rotate", "parent": "root" },
+	{ "name": "loading holder", "parent": "loading rotate" }
+],
+"slots": [
+	{ "name": "Load", "bone": "loading holder", "attachment": "Load" }
+],
+"skins": {
+	"default": {
+		"Load": {
+			"Load": { "x": 0.5, "width": 128, "height": 128 }
+		}
+	}
+},
+"animations": {
+	"loading": {
+		"bones": {
+			"loading rotate": {
+				"rotate": [
+					{ "time": 0, "angle": 0 },
+					{ "time": 0.1667, "angle": 90 },
+					{ "time": 0.3333, "angle": 180 },
+					{ "time": 0.5, "angle": -90 },
+					{ "time": 0.6667, "angle": 0 }
+				]
+			}
+		}
+	}
+}
+}

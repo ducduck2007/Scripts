@@ -1,0 +1,219 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 6
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Stuff_clay
+  m_Shader: {fileID: 10721, guid: 0000000000000000f000000000000000, type: 0}
+  m_ShaderKeywords: _BLENDMODE_BLEND _FRESNELLOFF_ON
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BumpMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ClipTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _CutoutTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailAlbedoMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailMask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailNormalMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Distortion:
+        m_Texture: {fileID: 2800000, guid: 82f4b06147155c54da475b309b9e24fa, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _EmissionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Gradient:
+        m_Texture: {fileID: 2800000, guid: 28c7aad1372ff114b90d330f8a2dd938, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: e2ccad640d3c960499fe3ec39fd61803, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTexMask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MetallicGlossMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NoiseTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _OcclusionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ParallaxMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SpecGlossMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _baseTex:
+        m_Texture: {fileID: 2800000, guid: f0e4c6ee6270543b19d980e2767acc40, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _maskTex:
+        m_Texture: {fileID: 2800000, guid: 00d1dc61304fe4183bb5dae9ee4dd842, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _noiseTex:
+        m_Texture: {fileID: 2800000, guid: 3322a533dc8434ee9a3f07e30a2992a9, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _noseTex:
+        m_Texture: {fileID: 2800000, guid: 0b365c3f883d54bbf8994ed5f1b892b9, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _texcoord:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Floats:
+    - _Amplitude: 0
+    - _BlendMode: 1
+    - _BumpScale: 1
+    - _ColorMultiplier: 1
+    - _CullMode: 2
+    - _Cutoff: 0.5
+    - _Cutout: 1
+    - _CutoutThreshold: 0.015
+    - _Depthpower: 0
+    - _DetailNormalMapScale: 1
+    - _DistortMainTexture: 0
+    - _DistortionUSpeed: 0.1
+    - _DistortionVSpeed: 0.1
+    - _DoubleSided: 1
+    - _DstBlend: 0
+    - _DstMode: 10
+    - _EdgeSoftness: 0
+    - _Emission: 1
+    - _Frequency: 9.42
+    - _FresnelFadeFactor: 3
+    - _FresnelPow: 5
+    - _FresnelR0: 0.04
+    - _GlossMapScale: 1
+    - _Glossiness: 0.5
+    - _GlossyReflections: 1
+    - _GradientPower: 0
+    - _GradientUSpeed: 0.1
+    - _GradientVSpeed: 0.1
+    - _InvFade: 1
+    - _IsDecalProjector: 0
+    - _MainTextUSpeed: 0
+    - _MainTextVSpeed: 0
+    - _Metallic: 0
+    - _Mode: 0
+    - _NoiseAmount: 0.1
+    - _OcclusionStrength: 1
+    - _Opacity: 1
+    - _Parallax: 0.02
+    - _Shininess: 0.078125
+    - _SmoothnessTextureChannel: 0
+    - _SpecularHighlights: 1
+    - _SrcBlend: 1
+    - _SrcMode: 5
+    - _StartFrequency: 4
+    - _UVSec: 0
+    - _UVcompY: 1
+    - _UseCutout: 0
+    - _UseCutoutTex: 0
+    - _UseCutoutThreshold: 0
+    - _UseFrameBlending: 0
+    - _UseFresnel: 0
+    - _UseFresnelFading: 0
+    - _UseNoiseDistortion: 0
+    - _UseParticlesAlphaCutout: 0
+    - _UseSoft: 0
+    - _UseSoftCutout: 0
+    - _UseSoftInverted: 0
+    - _UseVertexStreamRandom: 0
+    - _Useblack: 0
+    - _Usedepth: 0
+    - _ZWrite: 1
+    - _ZWriteMode: 0
+    - __dirty: 1
+    - _alphaDensity: 2
+    - _alphaPower: 1
+    - _baseTexDensity: 1
+    - _baseTexSpdX: 0
+    - _baseTexSpdY: 0
+    - _baseTexU: 1
+    - _baseTexV: 1
+    - _channelDivide: 3
+    - _compYInv: 0
+    - _depthBlend: 1
+    - _dynCorrect: 1
+    - _emissive: 1
+    - _emissivePower: 1
+    - _fresInv: 0
+    - _fresPower: 1
+    - _fresnelInv: 0
+    - _fresnelPower: 1
+    - _fresnellOff: 1
+    - _haveAlpha: 0
+    - _inDensity: 1
+    - _noiseDensity: 1
+    - _noisePower: 0.2
+    - _noiseSpdX: 0.3
+    - _noiseSpdY: -1
+    - _noiseTexSpdX: 0
+    - _noiseTexSpdY: 0
+    - _noiseTexU: 1
+    - _noiseTexUVcorrect: 5
+    - _noiseTexV: 1
+    - _notUseB: 0
+    - _notUseDepthBlend: 0
+    - _notUseG: 0
+    - _notUseR: 0
+    - _outDensity: 2
+    - _outHardness: 200
+    - _simpleToon: 0
+    - _texDensity: 1
+    - _useDepthBlend: 0
+    - _useFresnel: 0
+    - _useTexColor: 0
+    - _vertColorDensity: 1
+    m_Colors:
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _CutoutColor: {r: 1, g: 1, b: 1, a: 1}
+    - _DistortionSpeedScale: {r: 1, g: -1, b: 0.15, a: 0.15}
+    - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
+    - _FresnelColor: {r: 1, g: 1, b: 1, a: 1}
+    - _SpecColor: {r: 0.2, g: 0.2, b: 0.2, a: 1}
+    - _TintColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.5}
+    - _color: {r: 0.5, g: 0.5, b: 0.5, a: 1}

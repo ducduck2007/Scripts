@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 23b466966f603fa43a216c0647815446
+timeCreated: 1522138247
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: fx_textures_flare_materials.unity3d
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 345212
+  packageName: Free Game VFX Collection
+  packageVersion: 1.0
+  assetPath: Assets/Free Game VFX/Materials/zxv effects_textures.mat
+  uploadId: 820232

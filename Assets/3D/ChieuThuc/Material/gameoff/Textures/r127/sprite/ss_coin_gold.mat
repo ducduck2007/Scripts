@@ -1,0 +1,226 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 6
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: ss_coin_gold
+  m_Shader: {fileID: 10770, guid: 0000000000000000f000000000000000, type: 0}
+  m_ShaderKeywords: USE_CUTOUT USE_CUTOUT_TEX USE_FRAME_BLENDING USE_FRESNEL USE_NOISE_DISTORTION
+    _BLENDMODE_ADD _EMISSION _USEBLACK_ON _ZWRITEMODE_ON
+  m_LightmapFlags: 2
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _AlphaTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _BumpMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ClipTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ColorRamp:
+        m_Texture: {fileID: 2800000, guid: 789405d2635550c4c9df257b8e484c62, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _CutoutTex:
+        m_Texture: {fileID: 2800000, guid: 0934fca48dc56f349be30939eea71ea2, type: 3}
+        m_Scale: {x: 0.5, y: 0.5}
+        m_Offset: {x: 0, y: 0}
+    - _DetailAlbedoMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailMask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailNormalMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _DetailTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Distortion:
+        m_Texture: {fileID: 2800000, guid: 82f4b06147155c54da475b309b9e24fa, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _EmissionMap:
+        m_Texture: {fileID: 2800000, guid: dac3afd387b824648b3fd39d9010cb08, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Gradient:
+        m_Texture: {fileID: 2800000, guid: 28c7aad1372ff114b90d330f8a2dd938, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: 7051b458e5d91f941b5492dcf555a177, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTexMask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTexutre:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Mask:
+        m_Texture: {fileID: 2800000, guid: 03e4ee8d0b5f45045bb12e2930ed4058, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MetallicGlossMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _NoiseTex:
+        m_Texture: {fileID: 2800000, guid: 0aadcba748987a64db7e670239291cf8, type: 3}
+        m_Scale: {x: 0.5, y: 0.5}
+        m_Offset: {x: 0, y: 0}
+    - _OcclusionMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _ParallaxMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SpecGlossMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _baseTex:
+        m_Texture: {fileID: 2800000, guid: f0e4c6ee6270543b19d980e2767acc40, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _maskTex:
+        m_Texture: {fileID: 2800000, guid: 00d1dc61304fe4183bb5dae9ee4dd842, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _noiseTex:
+        m_Texture: {fileID: 2800000, guid: 3322a533dc8434ee9a3f07e30a2992a9, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _tex3coord:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _texcoord:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Floats:
+    - _Amplitude: 1
+    - _BlendMode: 0
+    - _BumpScale: 1
+    - _ColorMask: 15
+    - _ColorMultiplier: 0
+    - _CullMode: 0
+    - _Cutoff: 0.5
+    - _Cutout: 0
+    - _CutoutThreshold: 0.01
+    - _Depthpower: 1
+    - _DetailNormalMapScale: 1
+    - _DistortMainTexture: 0
+    - _DistortionUSpeed: 0.2
+    - _DistortionVSpeed: 0
+    - _DoubleSided: 1
+    - _DstBlend: 0
+    - _DstMode: 1
+    - _EdgeSoftness: 0
+    - _Emission: 4
+    - _Frequency: 0
+    - _FresnelFadeFactor: 1
+    - _FresnelPow: -14.67
+    - _FresnelR0: 0.01
+    - _GlossMapScale: 1
+    - _Glossiness: 0
+    - _GlossyReflections: 1
+    - _GradientPower: 0
+    - _GradientUSpeed: -0.2
+    - _GradientVSpeed: -0.2
+    - _InvFade: 1
+    - _IsDecalProjector: 0
+    - _LightTranslucent: 0.48
+    - _MainTextUSpeed: 0
+    - _MainTextVSpeed: 0
+    - _MainTextureUSpeed: 0
+    - _MainTextureVSpeed: 0
+    - _Metallic: 0
+    - _Mode: 0
+    - _NoiseAmount: 0.1144851
+    - _OcclusionStrength: 1
+    - _Opacity: 1.01
+    - _Parallax: 0.02
+    - _SmoothnessTextureChannel: 0
+    - _SpecularHighlights: 1
+    - _SrcBlend: 1
+    - _SrcMode: 3
+    - _StartFrequency: 4
+    - _Stencil: 0
+    - _StencilComp: 8
+    - _StencilOp: 0
+    - _StencilReadMask: 255
+    - _StencilWriteMask: 255
+    - _Strength: 0.2
+    - _UVSec: 0
+    - _UseAlphaMask: 0
+    - _UseCutout: 1
+    - _UseCutoutTex: 1
+    - _UseCutoutThreshold: 0
+    - _UseFrameBlending: 1
+    - _UseFresnel: 1
+    - _UseFresnelFading: 0
+    - _UseLighting: 0
+    - _UseNoiseDistortion: 1
+    - _UseParticlesAlphaCutout: 0
+    - _UseSoft: 0
+    - _UseSoftCutout: 0.7
+    - _UseSoftInverted: 0
+    - _UseUIAlphaClip: 0
+    - _UseVertexStreamRandom: 0
+    - _Useblack: 1
+    - _Usedepth: 0
+    - _ZWrite: 1
+    - _ZWriteMode: 1
+    - __dirty: 1
+    - _alphaDensity: 1.7
+    - _alphaPower: 1.13
+    - _baseTexSpdX: 0
+    - _baseTexSpdY: 0
+    - _baseTexU: 1
+    - _baseTexV: 1
+    - _depthBlend: 1
+    - _dynCorrect: 1.07
+    - _emissive: 2.22
+    - _inDensity: 1.6
+    - _noiseSpdX: 0.3
+    - _noiseSpdY: -1
+    - _noiseTexUVcorrect: 5
+    - _outDensity: 3.3
+    - _outHardness: 200
+    - _useDepthBlend: 0
+    m_Colors:
+    - _ClipRect: {r: -32767, g: -32767, b: 32767, a: 32767}
+    - _Color: {r: 1, g: 0.8469819, b: 0.042452812, a: 1}
+    - _CutoutColor: {r: 0.5413476, g: 0.41442588, b: 2.0874784, a: 1}
+    - _DistortionSpeedScale: {r: 2, g: -2, b: 0.3, a: 0}
+    - _EmissionColor: {r: 2.6082377, g: 1.884486, b: 0, a: 1}
+    - _FresnelColor: {r: 0.6698113, g: 0.40896252, b: 0.08530616, a: 1}
+    - _TintColor: {r: 0, g: 0, b: 0, a: 1}
+    - _color: {r: 0.8962264, g: 0.5540458, b: 0.13105197, a: 1}

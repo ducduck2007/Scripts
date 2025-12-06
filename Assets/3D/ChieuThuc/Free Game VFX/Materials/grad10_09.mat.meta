@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: e5d627caac203894fb0b2e6b3866b378
+timeCreated: 1435048583
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: fx_textures_line_materials.unity3d
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 345212
+  packageName: Free Game VFX Collection
+  packageVersion: 1.0
+  assetPath: Assets/Free Game VFX/Materials/grad10_09.mat
+  uploadId: 820232

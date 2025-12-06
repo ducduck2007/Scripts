@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a0e86dea6457b8040a98dd5bbc509986
+timeCreated: 1450410509
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 345212
+  packageName: Free Game VFX Collection
+  packageVersion: 1.0
+  assetPath: Assets/Free Game VFX/Materials/FX_smoke_02.mat
+  uploadId: 820232
