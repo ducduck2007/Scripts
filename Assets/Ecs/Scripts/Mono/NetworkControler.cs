@@ -14,6 +14,8 @@ public class NetworkControler : ManualSingleton<NetworkControler>, IAnyDisconnec
 
     private void Start()
     {
+        if (isDuplicate) return;
+        DontDestroyOnLoad(gameObject);
         _contexts = Contexts.sharedInstance;
         var listener = _contexts.network.CreateEntity();
         listener.AddAnyDisconnectListener(this);
@@ -29,6 +31,7 @@ public class NetworkControler : ManualSingleton<NetworkControler>, IAnyDisconnec
 
     private void OnDisable()
     {
+        if (isDuplicate) return; 
         OnResetSystems();
     }
 
@@ -72,7 +75,7 @@ public class NetworkControler : ManualSingleton<NetworkControler>, IAnyDisconnec
             if (networkContext.hasStream)
                 networkContext.stream.value.Close();
             networkContext.tcpClient.value.Close();
-            
+
             // UserData.Instance.IsCheckKetNoiThoatGame = false;
         }
 
@@ -80,7 +83,7 @@ public class NetworkControler : ManualSingleton<NetworkControler>, IAnyDisconnec
         // if (!UserData.Instance.IsCheckKetNoiThoatGame)
         // {
         //     SuperDialog.Instance.transform.SetAsLastSibling();
-            
+
         //     if (!OnOffDialog.Instance.isOnDialogMessage)
         //     {
         //         SuperDialog.Instance.PopupOneButton.ShowPopupDisconect("Mất kết nối đến server!", delegate

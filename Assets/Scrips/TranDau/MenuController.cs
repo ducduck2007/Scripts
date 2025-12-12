@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class MenuController : MonoBehaviour
@@ -8,8 +9,24 @@ public class MenuController : MonoBehaviour
     public Button btnTungChieu1;
     public Button btnTungChieu2;
     public Button btnDanhThuong;
-    public Toggle toggleRandom;
+    public Button btnThoat;
     public JoystickController joystick;
+    public PlayerMove player1, player2;
+
+    public PlayerMove player
+    {
+        get
+        {
+            if (B.Instance.teamId == 1)
+            {
+                return player1;
+            }
+            else
+            {
+                return player2;
+            }
+        }
+    }
 
     private void Awake()
     {
@@ -20,26 +37,29 @@ public class MenuController : MonoBehaviour
     {
         btnTungChieu.onClick.AddListener(() =>
         {
-            PlayerMove player = FindObjectOfType<PlayerMove>();
-            player.CastSkill1();
+            player.CastSkill(1);
+            SendData.SendAttack(0, 3, gameObject.transform.position, 1);
         });
 
         btnTungChieu1.onClick.AddListener(() =>
         {
-            PlayerMove player = FindObjectOfType<PlayerMove>();
-            player.CastSkill2();  // Skill thứ 2
+            player.CastSkill(2);
+            SendData.SendAttack(0, 3, gameObject.transform.position, 2);
         });
 
         btnTungChieu2.onClick.AddListener(() =>
         {
-            PlayerMove player = FindObjectOfType<PlayerMove>();
-            player.CastSkill3();  // Skill thứ 3
+            player.CastSkill(3);
+            SendData.SendAttack(0, 3, gameObject.transform.position, 3);
         });
 
         btnDanhThuong.onClick.AddListener(() =>
         {
-            PlayerMove player = FindObjectOfType<PlayerMove>();
             player.NormalAttack();   // ← chạy anim bên trong PlayerMove
+        });
+        btnThoat.onClick.AddListener(() =>
+        {
+            SceneManager.LoadScene("Game");
         });
     }
 }

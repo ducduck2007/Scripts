@@ -13,7 +13,14 @@ public class UiControl: ManualSingleton<UiControl>
 
     private void Start()
     {
-        _loginController = AgentUnity.InstanceObject<LoginController>(Load(PathResource.LoginController), transform);
+        if (!B.Instance.InGame)
+        {
+            _loginController = AgentUnity.InstanceObject<LoginController>(Load(PathResource.LoginController), transform);
+        }
+        else
+        {
+            MainGame.Show(true);
+        }
     }
 
     public void DestroyLoginController()

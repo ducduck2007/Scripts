@@ -2,45 +2,75 @@ using UnityEngine;
 
 public class Bullet : MonoBehaviour
 {
-    public float speed = 25f;
+    public float speed = 20f;
+    public float lifeTime = 3f;
+
     private Transform target;
     private int damage;
+    // private Vector3 damageSourcePosition;
 
-    public void Setup(Transform target, int damage)
+    // Thêm reference đến PlayerMove
+    private PlayerMove playerMove;
+
+    public void Setup(Transform target, int damage, Vector3 sourcePosition = default(Vector3))
     {
         this.target = target;
         this.damage = damage;
+        // this.damageSourcePosition = sourcePosition;
+
+        // Tìm PlayerMove
+        if (target != null)
+        {
+            playerMove = target.GetComponent<PlayerMove>();
+        }
+
+        // Hủy sau lifetime
+        Destroy(gameObject, lifeTime);
     }
 
-    private void Update()
+    void Update()
     {
-        if (target == null)
+        if (target == null || playerMove == null)
         {
             Destroy(gameObject);
             return;
         }
 
-        transform.position = Vector3.MoveTowards(transform.position, target.position, speed * Time.deltaTime);
+        // Di chuyển về phía target
+        Vector3 dir = target.position - transform.position;
+        float distanceThisFrame = speed * Time.deltaTime;
+
+        // Nếu đã đến gần target
+        if (dir.magnitude <= distanceThisFrame)
+        {
+            HitTarget();
+            return;
+        }
+
+        // Di chuyển
+        transform.Translate(dir.normalized * distanceThisFrame, Space.World);
         transform.LookAt(target);
     }
 
-    private void OnTriggerEnter(Collider other)
+    void HitTarget()
     {
-        if (other.CompareTag("Player"))
-        {
-            // Gọi script HP của Player
-            // PlayerHealth hp = other.GetComponent<PlayerHealth>();
-            // if (hp != null)
-            // {
-            //     hp.TakeDamage(damage);
-            // }
 
-            Destroy(gameObject); // Hủy đạn khi va chạm
-        }
+        // Gây damage cho player (đã comment out trong phiên bản đơn giản)
+        // if (playerMove != null && !playerMove.isDead)
+        // {
+        //     playerMove.TakeDamage(damage, Vector3.zero);
+        // }
+
+        // Hủy bullet
+        Destroy(gameObject);
     }
 
-    private void Start()
+    void OnTriggerEnter(Collider other)
     {
-        Destroy(gameObject, 4f); // Hủy nếu không trúng trong 4 giây
+        // Kiểm tra nếu chạm vào player
+        if (other.CompareTag("Player"))
+        {
+            Destroy(gameObject);
+        }
     }
 }

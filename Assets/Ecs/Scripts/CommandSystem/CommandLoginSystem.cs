@@ -22,7 +22,7 @@ public class CommandLoginSystem : BaseCommandSystem
             AgentUnity.LogWarning("CMD: LOGIN_GAME = 0" + msg.GetJson());
             if (CheckSuccess(msg))
             {
-                long userId = msg.GetLong("userId");
+                B.Instance.UserID = msg.GetLong("userId");
                 string userName = msg.GetString("userName");
                 int level = msg.GetInt("level");
                 int avatarId = msg.GetInt("avatarId");
@@ -31,6 +31,7 @@ public class CommandLoginSystem : BaseCommandSystem
                 AgentUnity.SetString(KeyLocalSave.PP_USERNAME, B.Instance.UserName);
                 AgentUnity.SetString(KeyLocalSave.PP_PASSWORD, B.Instance.PassWord);
                 UiControl.Instance.MainGame.Show(true);
+                B.Instance.InGame = true;
                 UiControl.Instance.DestroyLoginController();
             }
         }

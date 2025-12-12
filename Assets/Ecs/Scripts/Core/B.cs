@@ -41,6 +41,7 @@ internal class B
     public bool isConnectServerSuccess = false;
     public bool LoadDataInfo = false;
     public bool isAndroidNew = true;
+    public bool InGame = false;
     
     internal string linkBannerGame = "";
     internal string nameLogin = "";
@@ -68,5 +69,7 @@ internal class B
     
     public string linkSelectNap = "";
 
-    
+    public float PosX = 0;
+    public float PosZ = 0;
+    public int teamId = 0;
 }

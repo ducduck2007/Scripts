@@ -640,7 +640,7 @@ public class AgentUnity : MonoBehaviour
 
     public static void ScaleBg(GameObject bg)
     {
-        // bg.GetComponent<RectTransform>().sizeDelta = new Vector2(Screen.width, Screen.height);
+        bg.GetComponent<RectTransform>().sizeDelta = new Vector2(Screen.width, Screen.height);
     }
 
     public static void ScaleTranform(Transform tranScale)
@@ -650,7 +650,7 @@ public class AgentUnity : MonoBehaviour
         {
             scale = (float)Screen.height / 900;
         }
-        //tranScale.transform.localScale = new Vector3(scale, scale);
+        tranScale.transform.localScale = new Vector3(scale, scale);
     }
 
     public static void ScaleContent(Transform contentScale)
@@ -660,7 +660,7 @@ public class AgentUnity : MonoBehaviour
         {
             scale1 = (float)Screen.height / 900;
         }
-        //contentScale.transform.localScale = new Vector3(scale1, scale1);
+        contentScale.transform.localScale = new Vector3(scale1, scale1);
     }
 
     public static List<int> GetListByString(string chuoi)

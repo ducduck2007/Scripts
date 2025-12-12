@@ -1,469 +1,339 @@
 using UnityEngine;
+using System.Collections;
 
 public class PlayerMove : MonoBehaviour
 {
-    // ==================== CORE MOVEMENT ====================
     public float moveSpeed = 50f;
     public float gravity = -20f;
     public float turnSpeed = 10f;
     public float rotateSpeed = 10f;
+    public SpriteRenderer spTamDanhThuong;
+    public Transform parentSkill;
 
-    // Components
-    public Animator animator;
-    public CharacterController controller;
+    private bool isAlive;
+    public float hpMax;
+    public float hpCurrent;
 
-    // Attack
-    public float normalAttackRange = 3f;
-    public float skillAttackRange = 6f;
-    public float attackCooldown = 1f;
-    public Transform attackPoint;
-    public LayerMask enemyLayer;
-    public int normalAttackDamage = 1;
+    public ProgressBar HealthBar;
 
-    // ==================== SKILL CONFIGURATION ====================
     [System.Serializable]
     public class SkillConfig
     {
-        public string skillName;
-        public float duration = 2f;
-        public int damage = 3;
-        public GameObject enemyEffectPrefab;
-        public Transform playerEffectPrefab;
-        public string animationBool;
-        public float effectDelay = 0.3f;
-        public float damageDelay = 0.5f;
-        public bool spawnEffectAtStart = false;
-        public bool spawnEffectOnDamage = true;
-        public float effectScale = 1f;
-        public float effectDuration = 2f;
+        public GameObject prefab;
+        public string animationBool = "";
+        public float animationDuration = 1f;
+        public float delaySpawn = 0.3f;
     }
 
-    // Skill configurations
-    public SkillConfig skill1Config = new SkillConfig
-    {
-        skillName = "Skill1",
-        animationBool = "isTungChieu"
-    };
+    public SkillConfig skill1 = new SkillConfig();
+    public SkillConfig skill2 = new SkillConfig();
+    public SkillConfig skill3 = new SkillConfig();
 
-    public SkillConfig skill2Config = new SkillConfig
-    {
-        skillName = "Skill2",
-        animationBool = "isSkill2"
-    };
+    private SkillConfig currentSkillCfg;
 
-    public SkillConfig skill3Config = new SkillConfig
-    {
-        skillName = "Skill3",
-        animationBool = "isSkill3"
-    };
+    public Animator animator;
+    public CharacterController controller;
 
-    // Normal attack
+    public Transform attackPoint;
+    public LayerMask enemyLayer;
+    public int normalAttackDamage = 1;
+    public RectTransform directionArrow;
+
+    [System.Serializable]
+    public class NormalAttackConfig
+    {
+        public int attackRange = 3;
+        public int damage = 1;
+        public float duration = 1.2f;
+        public float damageDelay = 0.3f;
+        public string animationBool = "isDanhThuong";
+        public string animationTrigger = "Attack";
+    }
+
+    public NormalAttackConfig normalAttackConfig = new NormalAttackConfig();
+
     private bool isNormalAttacking;
-    private float normalAttackEndTime;
-    public float normalAttackDuration = 1.2f;
+    private bool isSkillCasting;
+    public Canvas Canvas;
 
-    // ==================== EFFECT SETTINGS ====================
-    [Header("Effect Settings")]
-    public Transform skillEffectPoint; // Vị trí spawn hiệu ứng trên enemy
-    public Transform playerSkillEffectPoint; // Vị trí spawn hiệu ứng player
-
-    [Header("Effect Height Settings")]
-    public bool spawnAtFeet = false;
-    public bool spawnAtCustomHeight = true;
-    public float effectHeight = 0.5f;
-    public float groundOffset = 0.1f;
-    public LayerMask groundLayer;
-    public float raycastDistance = 5f;
-
-    [Header("Effect Position Offset")]
-    public Vector3 positionOffset = Vector3.zero;
-    public Vector3 rotationOffset = Vector3.zero;
-
-    [Header("Effect Movement")]
-    public bool followPlayer = true;
-    public bool destroyOnCastEnd = true;
-
-    // ==================== PRIVATE VARIABLES ====================
     private Transform target;
-    private float lastAttackTime;
     private Vector3 velocity;
-
-    // Current active states
-    private SkillConfig currentSkill;
-    private float skillEndTime;
-    private bool isCastingSkill;
-
-    // Effect tracking
-    private GameObject currentPlayerEffect;
-    private bool skillEffectSpawned;
-    private bool playerSkillEffectSpawned;
 
     void Start()
     {
-        if (groundLayer.value == 0)
+        Debug.Log("PlayerMove initialized. Using Animation Events for attack completion.");
+        if (HealthBar != null)
         {
-            groundLayer = LayerMask.GetMask("Default", "Ground", "Terrain");
+            HealthBar.transform.SetParent(Canvas.transform);
+            HealthBar.color = Color.green;
         }
-
-        // Set default skill names if not set
-        if (string.IsNullOrEmpty(skill1Config.skillName)) skill1Config.skillName = "Skill1";
-        if (string.IsNullOrEmpty(skill2Config.skillName)) skill2Config.skillName = "Skill2";
-        if (string.IsNullOrEmpty(skill3Config.skillName)) skill3Config.skillName = "Skill3";
     }
 
     void Update()
     {
-        // Check skill end conditions
-        if (isNormalAttacking && Time.time >= normalAttackEndTime)
-            OnNormalAttackEnd();
+        // Tắt root motion khi đánh để code tự kiểm soát hướng
+        animator.applyRootMotion = !(isNormalAttacking || isSkillCasting);
 
-        if (isCastingSkill && Time.time >= skillEndTime)
-            OnSkillEnd(currentSkill);
+        if ((isNormalAttacking || isSkillCasting) && target != null)
+        {
+            RotateToTarget(); // luôn xoay trong lúc đánh hoặc ra chiêu
+        }
 
-        // Movement
-        Move();
-
-        // Update effect position if following player
-        UpdateEffectPosition();
+        if (!IsBusy())
+            Move();
+        else
+            SetAnimatorWalking(false);
     }
 
-    #region ==================== PUBLIC SKILL METHODS ====================
-    public void CastSkill3()
-    {
-        StartSkill(skill3Config);
-    }
-
-    public void CastSkill2() => StartSkill(skill2Config);
-
-    public void CastSkill1() => StartSkill(skill1Config);
-
+    #region NORMAL ATTACK
     public void NormalAttack()
     {
+        if (_HienTamDanhThuong != null)
+        {
+            StopCoroutine(_HienTamDanhThuong);
+            _HienTamDanhThuong = null;
+        }
+        _HienTamDanhThuong = HienTamDanhThuong();
+        StartCoroutine(_HienTamDanhThuong);
         if (IsBusy()) return;
 
-        Debug.Log($">>> Kiểm tra đánh thường...");
-        FindTargetInRange(normalAttackRange);
+        SendData.SendAttack(0, 3, controller.transform.position, 0);
+        FindTargetInRange(normalAttackConfig.attackRange);
         StartNormalAttack();
     }
-    #endregion
 
-    #region ==================== SKILL MANAGEMENT ====================
-    private void StartSkill(SkillConfig config)
+    public void OnNormalAttackAnimationEnd()
     {
-        if (IsBusy()) return;
-
-        currentSkill = config;
-        isCastingSkill = true;
-        skillEndTime = Time.time + config.duration;
-
-        Debug.Log($">>> Bắt đầu {config.skillName}...");
-
-        // Reset movement
-        velocity = Vector3.zero;
-
-        // Reset effect flags
-        skillEffectSpawned = false;
-        playerSkillEffectSpawned = false;
-
-        // Clean up old effect
-        CleanupCurrentEffect();
-
-        // Play animation
-        SetAnimatorWalking(false);
-        animator.SetBool(config.animationBool, true);
-
-        // Find target
-        FindTargetInRange(skillAttackRange);
-
-        // Schedule effect and damage
-        if (config.spawnEffectAtStart)
-        {
-            Invoke(nameof(SpawnPlayerSkillEffect), 0f);
-        }
-        else
-        {
-            Invoke(nameof(SpawnPlayerSkillEffect), config.effectDelay);
-        }
-
-        // Schedule damage
-        Invoke(nameof(DealCurrentSkillDamage), config.damageDelay);
+        EndNormalAttack();
     }
 
-    private void DealCurrentSkillDamage()
-    {
-        if (currentSkill == null) return;
-
-        if (target != null)
-        {
-            // Spawn enemy effect (chỉ spawn nếu có prefab)
-            if (currentSkill.enemyEffectPrefab != null && skillEffectPoint != null)
-            {
-                var fx = Instantiate(currentSkill.enemyEffectPrefab,
-                                   skillEffectPoint.position,
-                                   skillEffectPoint.rotation);
-
-                // Scale effect
-                fx.transform.localScale *= 3f;
-
-                // Destroy after duration
-                Destroy(fx, 2f);
-            }
-
-            // Spawn player effect if not already spawned
-            if (currentSkill.spawnEffectOnDamage && !playerSkillEffectSpawned)
-            {
-                SpawnPlayerSkillEffect();
-            }
-
-            // Deal damage
-            DealDamageInRange(skillAttackRange, currentSkill.damage, currentSkill.skillName);
-        }
-        else
-        {
-            Debug.Log($"{currentSkill.skillName} không trúng mục tiêu nào");
-        }
-
-        skillEffectSpawned = true;
-    }
-
-    private void OnSkillEnd(SkillConfig config)
-    {
-        if (config == null) return;
-
-        Debug.Log($"{config.skillName} animation kết thúc");
-
-        // Reset animation
-        animator.SetBool(config.animationBool, false);
-        isCastingSkill = false;
-
-        // Cleanup effect
-        if (destroyOnCastEnd && currentPlayerEffect != null)
-        {
-            Destroy(currentPlayerEffect);
-            currentPlayerEffect = null;
-        }
-
-        // Reset tracking
-        skillEffectSpawned = false;
-        playerSkillEffectSpawned = false;
-        currentSkill = null;
-
-        // Update walking animation
-        UpdateWalkingAnimation();
-    }
-    #endregion
-
-    #region ==================== NORMAL ATTACK ====================
     private void StartNormalAttack()
     {
+        if (target != null) RotateToTarget();
+
+        ResetCombatStates();
         isNormalAttacking = true;
-        normalAttackEndTime = Time.time + normalAttackDuration;
-
-        SetAnimatorWalking(false);
-        animator.SetBool("isDanhThuong", true);
-
-        lastAttackTime = Time.time;
-
-        Debug.Log(">>> Đang đánh thường (animation chạy)");
-        Invoke(nameof(DealNormalAttackDamage), 0.3f);
+        animator.SetBool(normalAttackConfig.animationBool, true);
+        Invoke(nameof(AutoResetNormalAttack), normalAttackConfig.duration);
     }
 
-    private void OnNormalAttackEnd()
+    private IEnumerator _HienTamDanhThuong;
+
+    private IEnumerator HienTamDanhThuong()
     {
-        animator.SetBool("isDanhThuong", false);
+        Vector2 newSize = spTamDanhThuong.size;
+        newSize.x = normalAttackConfig.attackRange * 2;
+        newSize.y = normalAttackConfig.attackRange * 2;
+        spTamDanhThuong.size = newSize;
+        spTamDanhThuong.enabled = true;
+        yield return new WaitForSeconds(0.2f);
+        spTamDanhThuong.enabled = false;
+    }
+
+    private void AutoResetNormalAttack()
+    {
+        if (isNormalAttacking)
+            EndNormalAttack();
+    }
+
+    private void EndNormalAttack()
+    {
+        if (!isNormalAttacking) return;
+
+        animator.SetBool(normalAttackConfig.animationBool, false);
         isNormalAttacking = false;
         UpdateWalkingAnimation();
-        Debug.Log("Đánh thường animation kết thúc");
     }
     #endregion
 
-    #region ==================== EFFECT MANAGEMENT ====================
-    private void SpawnPlayerSkillEffect()
+    #region SKILLS
+    // public void CastSkill(int skill)
+    // {
+    //     FindTargetInRange(normalAttackConfig.attackRange);
+    //     if (IsBusy()) return;
+
+    //     if (target != null)
+    //     {
+    //         RotateToTarget();
+    //     }
+
+    //     isSkillCasting = true;
+
+    //     if (skill == 1) currentSkillCfg = skill1;
+    //     else if (skill == 2) currentSkillCfg = skill2;
+    //     else if (skill == 3) currentSkillCfg = skill3;
+    //     else return;
+
+    //     if (!string.IsNullOrEmpty(currentSkillCfg.animationBool))
+    //     {
+    //         animator.SetBool("isWalking", false);
+    //         animator.SetBool(currentSkillCfg.animationBool, true);
+
+    //         Invoke(nameof(EndSkillAnimationWrapper), currentSkillCfg.animationDuration);
+    //     }
+    //     Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
+    //     if (skill != 3)
+    //     {
+    //         Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
+    //     }
+    //     else
+    //     {
+    //         Invoke(nameof(SpawnSkillWrapper2), currentSkillCfg.delaySpawn);
+    //     }
+    // }
+    public void CastSkill(int skill)
     {
-        if (currentSkill == null || playerSkillEffectSpawned || !isCastingSkill) return;
+        FindTargetInRange(normalAttackConfig.attackRange);
+        if (IsBusy()) return;
 
-        playerSkillEffectSpawned = true;
+        // chọn config trước rồi mới xử lý
+        if (skill == 1) currentSkillCfg = skill1;
+        else if (skill == 2) currentSkillCfg = skill2;
+        else if (skill == 3) currentSkillCfg = skill3;
+        else return;
 
-        if (currentSkill.playerEffectPrefab == null) return;
+        if (target != null)
+            RotateToTarget();
 
-        Vector3 spawnPosition = CalculateEffectPosition();
-        Quaternion spawnRotation = CalculateEffectRotation();
+        isSkillCasting = true;
 
-        currentPlayerEffect = Instantiate(currentSkill.playerEffectPrefab.gameObject,
-                                         spawnPosition,
-                                         spawnRotation);
-
-        // Apply scaling
-        currentPlayerEffect.transform.localScale *= currentSkill.effectScale;
-
-        // Parent if following player
-        if (followPlayer)
+        if (!string.IsNullOrEmpty(currentSkillCfg.animationBool))
         {
-            currentPlayerEffect.transform.parent = transform;
+            animator.SetBool("isWalking", false);
+            animator.SetBool(currentSkillCfg.animationBool, true);
+            Invoke(nameof(EndSkillAnimationWrapper), currentSkillCfg.animationDuration);
         }
 
-        // Calculate destroy time
-        float destroyTime = currentSkill.effectDuration;
-        if (destroyOnCastEnd)
-        {
-            float timeLeft = skillEndTime - Time.time;
-            destroyTime = Mathf.Min(destroyTime, timeLeft);
-        }
-
-        Destroy(currentPlayerEffect, destroyTime);
+        // chỉ skill 1, 2 spawn bình thường
+        if (skill != 3)
+            Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
+        else
+            Invoke(nameof(SpawnSkillWrapper2), currentSkillCfg.delaySpawn);
     }
 
-    private Vector3 CalculateEffectPosition()
+    private void EndSkillAnimationWrapper()
     {
-        if (spawnAtFeet)
-        {
-            return transform.position + Vector3.up * groundOffset;
-        }
+        isSkillCasting = false;
 
-        if (spawnAtCustomHeight)
-        {
-            Vector3 basePosition = playerSkillEffectPoint != null ?
-                playerSkillEffectPoint.position : transform.position;
-            return basePosition + Vector3.up * effectHeight + positionOffset;
-        }
+        if (currentSkillCfg != null && !string.IsNullOrEmpty(currentSkillCfg.animationBool))
+            animator.SetBool(currentSkillCfg.animationBool, false);
 
-        Vector3 pos = playerSkillEffectPoint != null ?
-            playerSkillEffectPoint.position : transform.position;
-        return pos + positionOffset;
+        UpdateWalkingAnimation();
     }
 
-    private Quaternion CalculateEffectRotation()
+    private void SpawnSkillWrapper()
     {
-        Quaternion spawnRotation = Quaternion.identity;
-        if (playerSkillEffectPoint != null && !spawnAtFeet)
+        if (currentSkillCfg != null && currentSkillCfg.prefab != null)
         {
-            spawnRotation = playerSkillEffectPoint.rotation;
-        }
-        return spawnRotation * Quaternion.Euler(rotationOffset);
-    }
-
-    private void UpdateEffectPosition()
-    {
-        if (currentPlayerEffect == null || !followPlayer) return;
-
-        Vector3 newPosition = CalculateEffectPosition();
-        currentPlayerEffect.transform.position = newPosition;
-    }
-
-    private void CleanupCurrentEffect()
-    {
-        if (currentPlayerEffect != null)
-        {
-            Destroy(currentPlayerEffect);
-            currentPlayerEffect = null;
+            Instantiate(currentSkillCfg.prefab, parentSkill.position, parentSkill.rotation);
         }
     }
-    #endregion
 
-    #region ==================== COMBAT LOGIC ====================
-    private void FindTargetInRange(float range)
+
+    // private void SpawnSkillWrapper2()
+    // {
+    //     if (currentSkillCfg != null && currentSkillCfg.prefab != null)
+    //     {
+    //         Instantiate(currentSkillCfg.prefab, TranDauControl.Instance.playerOther.transform.position, TranDauControl.Instance.playerOther.transform.rotation);
+    //     }
+    // }
+
+    private void SpawnSkillWrapper2()
     {
-        Collider[] hits = Physics.OverlapSphere(transform.position, range, enemyLayer);
-
-        float minDist = Mathf.Infinity;
-        target = null;
-
-        foreach (var h in hits)
+        if (currentSkillCfg == null || currentSkillCfg.prefab == null)
         {
-            BotController bot = h.GetComponent<BotController>();
-            if (bot != null && !bot.isDead)
-            {
-                float d = Vector3.Distance(transform.position, h.transform.position);
-                if (d < minDist)
-                {
-                    minDist = d;
-                    target = h.transform;
-                }
-            }
-        }
-
-        Debug.Log(target != null ?
-            $"Tìm thấy target trong tầm {range}: {target.name}" :
-            $"Không tìm thấy target trong tầm {range}");
-    }
-
-    void RotateToTarget()
-    {
-        if (target == null) return;
-
-        Vector3 dir = target.position - transform.position;
-        dir.y = 0;
-
-        if (dir.sqrMagnitude < 0.1f) return;
-
-        Quaternion targetRot = Quaternion.LookRotation(dir);
-        transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSpeed * Time.deltaTime);
-    }
-
-    private void DealNormalAttackDamage()
-    {
-        if (target == null)
-        {
-            Debug.Log("Đánh thường không trúng mục tiêu nào");
+            Debug.LogWarning("Skill 3 spawn failed: prefab null");
             return;
         }
 
-        float distance = Vector3.Distance(transform.position, target.position);
-        if (distance <= normalAttackRange)
+        Vector3 spawnPos;
+        Quaternion spawnRot;
+
+        if (target != null)
         {
-            BotController bot = target.GetComponent<BotController>();
-            if (bot != null)
-            {
-                bot.TakeDamage(normalAttackDamage);
-                Debug.Log($"Đánh thường gây {normalAttackDamage} damage cho {target.name}");
-            }
+            // Spawn vào vị trí mục tiêu
+            spawnPos = target.position;
+            spawnRot = Quaternion.LookRotation(target.position - controller.transform.position);
         }
         else
         {
-            Debug.Log("Mục tiêu đã ra khỏi tầm đánh!");
-        }
-    }
-
-    private void DealDamageInRange(float range, int damage, string attackType)
-    {
-        if (target == null) return;
-
-        Collider[] hits = Physics.OverlapSphere(transform.position, range, enemyLayer);
-
-        int hitCount = 0;
-        foreach (var h in hits)
-        {
-            BotController bot = h.GetComponent<BotController>();
-            if (bot != null && !bot.isDead)
-            {
-                bot.TakeDamage(damage);
-                hitCount++;
-                Debug.Log($"{attackType} gây {damage} sát thương cho {h.name}");
-            }
+            // Không có target → spawn về phía trước mặt 1 khoảng tầm đánh
+            spawnPos = controller.transform.position + controller.transform.forward * normalAttackConfig.attackRange;
+            spawnRot = controller.transform.rotation;
         }
 
-        Debug.Log($"{attackType} trúng {hitCount} mục tiêu");
+        Instantiate(currentSkillCfg.prefab, spawnPos, spawnRot);
+
+        Debug.Log("Skill 3 spawned at: " + spawnPos);
     }
     #endregion
 
-    #region ==================== MOVEMENT ====================
+    #region COMBAT LOGIC
+    private void FindTargetInRange(float range)
+    {
+        Collider[] hits = Physics.OverlapSphere(controller.transform.position, range, enemyLayer);
+
+        target = null;
+        float minDist = Mathf.Infinity;
+
+        foreach (var h in hits)
+        {
+            float d = Vector3.Distance(controller.transform.position, h.transform.position);
+            if (d < minDist)
+            {
+                minDist = d;
+                target = h.transform;
+            }
+        }
+    }
+
+    private void RotateToTarget()
+    {
+        if (target == null) return;
+
+        Debug.Log(
+            "Controller: " + controller.transform.position +
+            " | Target: " + target.position +
+            " | Dir: " + (target.position - controller.transform.position)
+        );
+
+        Vector3 dir = target.position - controller.transform.position;
+        dir.y = 0;
+
+        if (dir.sqrMagnitude < 0.01f) return;
+
+        Quaternion targetRot = Quaternion.LookRotation(dir);
+        controller.transform.rotation = Quaternion.Slerp(
+            controller.transform.rotation,
+            targetRot,
+            rotateSpeed * Time.deltaTime
+        );
+    }
+    #endregion
+
+    #region MOVEMENT
     private void Move()
     {
-        // Handle rotation during combat
         if (IsInCombatState())
         {
             HandleCombatMovement();
             return;
         }
-
         HandleNormalMovement();
+    }
+
+    public void SetPotion()
+    {
+        controller.enabled = false; // tắt trước khi set vị trí
+        controller.transform.position = new Vector3(B.Instance.PosX, 200, B.Instance.PosZ);
+        controller.enabled = true;
     }
 
     private void HandleCombatMovement()
     {
-        RotateToTarget();
+        if (target != null)
+            RotateToTarget();
 
-        // Apply gravity
         if (controller.isGrounded && velocity.y < 0)
             velocity.y = -2f;
 
@@ -476,81 +346,133 @@ public class PlayerMove : MonoBehaviour
         Vector2 input = MenuController.Instance.joystick.inputVector;
         Vector3 direction = new Vector3(input.x, 0, input.y);
 
-        SetAnimatorWalking(direction.magnitude > 0.1f);
+        bool hasInput = direction.magnitude > 0.1f;
+        animator.SetBool("isWalking", hasInput);
 
-        if (direction.magnitude > 0.1f)
-        {
-            CameraFollow.Instance?.SetFollow(true);
-        }
-
-        Vector3 moveDir = Vector3.zero;
-
-        if (direction.magnitude > 0.1f)
+        if (hasInput)
         {
             float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg;
-            float angle = Mathf.LerpAngle(transform.eulerAngles.y, targetAngle, Time.deltaTime * turnSpeed);
+            controller.transform.rotation = Quaternion.Lerp(controller.transform.rotation,
+                                                      Quaternion.Euler(0, targetAngle, 0),
+                                                      Time.deltaTime * turnSpeed);
 
-            transform.rotation = Quaternion.Euler(0, angle, 0);
-            moveDir = Quaternion.Euler(0, targetAngle, 0) * Vector3.forward * moveSpeed;
+            Vector3 moveDir = controller.transform.forward;
+            controller.Move(moveDir * moveSpeed * Time.deltaTime);
         }
 
-        // Apply gravity
-        if (controller.isGrounded && velocity.y < 0)
-            velocity.y = -2f;
-
         velocity.y += gravity * Time.deltaTime;
+        controller.Move(velocity * Time.deltaTime);
+        if (GameStateManager.IsInGame())
+        {
+            if (Time.time - lastInputTime >= inputInterval)
+            {
+                lastInputTime = Time.time;
+                if (hasInput)
+                {
+                    Vector2 normalized = input.normalized;
+                    int dirX = Mathf.RoundToInt(normalized.x * 100);
+                    int dirY = Mathf.RoundToInt(normalized.y * 100);
+                    SendData.SendMovementInput(dirX, dirY, true, controller.transform.position);
+                    lastInput = input;
 
-        Vector3 finalMove = moveDir + velocity;
-        controller.Move(finalMove * Time.deltaTime);
-    }
+                    float angle = Mathf.Atan2(normalized.y, normalized.x) * Mathf.Rad2Deg;
+                    directionArrow.rotation = Quaternion.Euler(0, 0, angle - 90);
+                    directionArrow.gameObject.SetActive(true);
+                }
+                else if (lastInput.magnitude > 0.1f)
+                {
+                    SendData.SendStop(controller.transform.position);
+                    lastInput = Vector2.zero;
 
-    private bool IsInCombatState()
-    {
-        return isNormalAttacking || isCastingSkill;
+                    directionArrow.gameObject.SetActive(false);
+                }
+            }
+        }
     }
+    private float lastInputTime = 0f;
+    private float inputInterval = 0.05f;
+    private Vector2 lastInput = Vector2.zero;
 
-    private bool IsBusy()
-    {
-        return isNormalAttacking || isCastingSkill;
-    }
     #endregion
 
-    #region ==================== UTILITY METHODS ====================
-    private void SetAnimatorWalking(bool isWalking)
-    {
-        animator.SetBool("isWalking", isWalking);
-    }
+
+    #region STATE + GIZMOS
+    private bool IsBusy() => isNormalAttacking || isSkillCasting;
+    private bool IsInCombatState() => isNormalAttacking || isSkillCasting;
 
     private void UpdateWalkingAnimation()
     {
         Vector2 input = MenuController.Instance.joystick.inputVector;
         SetAnimatorWalking(input.magnitude > 0.1f);
     }
-    #endregion
-
-    #region ==================== INTERFACE IMPLEMENTATION ====================
-    public void OnSkillAnimationEnd(string skillName)
+    public void ApplyServerData(PlayerOutPutSv data)
     {
-        Debug.Log($"Skill {skillName} animation ended");
+        isAlive = data.isAlive;
+        SetHp(data.hp, data.maxHp);
+    }
 
-        // Reset animation bools cho tất cả skill
+    public void SetHp(int hp, int maxHp)
+    {
+        hpMax = maxHp;
+        hpCurrent = hp;
+        if (HealthBar != null)
+        {
+            if (hpCurrent < hpMax)
+            {
+                HealthBar.SetProgress((float)(hpCurrent / hpMax), 3);
+            }
+            else
+            {
+                HealthBar.SetProgress(1f, 100);
+            }
+        }
+    }
+
+    private void SetAnimatorWalking(bool isWalking)
+    {
+        animator.SetBool("isWalking", isWalking);
+    }
+
+    private void ResetCombatStates()
+    {
+        CancelInvoke(nameof(AutoResetNormalAttack));
+        isNormalAttacking = false;
+    }
+
+
+
+    public void onDeath()
+    {
+        animator.SetBool("isWalking", false);
+        animator.SetBool("isDanhThuong", false);
         animator.SetBool("isTungChieu", false);
         animator.SetBool("isSkill2", false);
         animator.SetBool("isSkill3", false);
-
-        // Reset casting state
-        isCastingSkill = false;
-        currentSkill = null;
-
-        // Cleanup effect
-        if (destroyOnCastEnd && currentPlayerEffect != null)
+        animator.SetBool("isDeath", true);
+        if (HealthBar != null)
         {
-            Destroy(currentPlayerEffect);
-            currentPlayerEffect = null;
+            HealthBar.gameObject.SetActive(false);
         }
+    }
 
-        // Update walking animation
-        UpdateWalkingAnimation();
+    public void onRespawn(int hp)
+    {
+        animator.SetBool("isDeath", false);
+        SetPotion();
+        if (HealthBar != null)
+        {
+            HealthBar.gameObject.SetActive(true);
+        }
+        SetHp(hp, hp);
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        if (controller.transform == null) return;
+        Gizmos.color = Color.white;
+        Gizmos.DrawWireSphere(controller.transform.position, normalAttackConfig.attackRange);
     }
     #endregion
+
+    // private ActorVisibility visibility;
 }

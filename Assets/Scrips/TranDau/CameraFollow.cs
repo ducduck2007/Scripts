@@ -5,6 +5,8 @@ public class CameraFollow : MonoBehaviour
 {
     public static CameraFollow Instance;
 
+    public GameObject nv1, nv2;
+
     public Transform target;
     public Vector3 offset = new Vector3(100, 400, -900);
     public float followSmooth = 5f; // giảm chút để mượt hơn
@@ -18,12 +20,20 @@ public class CameraFollow : MonoBehaviour
     {
         Instance = this;
         // Cố định góc ngay từ đầu
+        if (B.Instance.teamId == 1)
+        {
+            target = nv1.transform;
+        }
+        else
+        {
+            target = nv2.transform;
+        }
         transform.rotation = Quaternion.Euler(50f, -12f, 5f);
     }
 
     private void LateUpdate()
     {
-        HandleDrag();
+        // HandleDrag();
 
         if (isFollow && target != null)
         {

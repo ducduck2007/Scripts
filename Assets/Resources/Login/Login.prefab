@@ -241,6 +241,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 224563179466126444}
   - {fileID: 6872893739940562274}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -269,6 +270,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93347fc43aab3b64aba895bde7779d4e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  bg: {fileID: 1881889276761756}
+  tranScale: {fileID: 6872893739940562274}
+  contentScale: {fileID: 0}
   btnLogin: {fileID: 114315797054563512}
   btnRegister: {fileID: 114509686672949422}
   inputUserName: {fileID: 114720913204854710}
@@ -988,7 +992,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 6872893739940562274}
+  m_Father: {fileID: 224581429183657866}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
@@ -1197,7 +1201,6 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 224563179466126444}
   - {fileID: 9218847524649161819}
   - {fileID: 224857753233441676}
   - {fileID: 224349109817407388}

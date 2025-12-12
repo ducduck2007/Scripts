@@ -22,7 +22,8 @@ public class PathResource
     #endregion
 
 
-    public const string MainMenu = "Prefab/Menu/MainMenu";
+    public const string PopupOneButton = "ThongBao/PopupOneButton";
+    public const string PopupTwoButton = "ThongBao/PopupTwoButton";
     public const string MainGame = "MainGame/MainGame";
 
     public const string LoadWait = "Load/LoadWait";

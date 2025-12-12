@@ -1,6 +1,6 @@
 ﻿public class CMD
 {
-	// 1- Happy Farm, 3-Fanpage, 5-Babylon
+    // 1- Happy Farm, 3-Fanpage, 5-Babylon
 #if UNITY_ANDROID
     public const int PROVIDER_ID = 1;
     public const int TYPE_FLATFORM = TypePlatform.ANDROID;
@@ -12,7 +12,31 @@
     public const int PROVIDER_ID = 1;
     public const int TYPE_FLATFORM = TypePlatform.PC;
 #endif
-	public const string GAME_ID = "03";
-	public const int LOGIN_GAME = 0; // Login game
-	
+    public const string GAME_ID = "03";
+    public const int LOGIN_GAME = 0; // Login game
+
+    // Matchmaking
+    public const int FIND_MATCH = 40;
+    public const int MATCH_FOUND = 41;
+    public const int SELECT_HERO = 42;
+    public const int HERO_SELECTED = 43;
+    public const int GAME_START = 44;
+    public const int GAME_END = 45;
+    public const int CANCEL_FIND_MATCH = 46;
+
+    // Game
+    public const int GAME_SNAPSHOT = 50;
+    public const int PLAYERS_IN_ZONE = 11;
+    public const int PLAYER_JOINED = 12;
+    public const int PLAYER_LEFT = 13;
+    public const int RESPAWN = 14;
+
+    // Movement
+    public const int MOVEMENT_INPUT = 20;
+    public const int STOP_COMMAND = 22;
+
+    // Combat
+    public const int ATTACK = 30;
+    public const int DAMAGE_DEALT = 31;
+    public const int DEATH = 32;
 }

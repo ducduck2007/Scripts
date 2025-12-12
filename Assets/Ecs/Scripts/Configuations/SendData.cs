@@ -14,11 +14,11 @@ public class SendData
         entity.isSend = true;
     }
 
-    
+
     internal static void OnLoginGame()
     {
         B.Instance.isConnectServerSuccess = false;
-        LoadController.Instance.ShowCheckLoadWait(true);
+        ShowLoadWait();
         AgentUnity.LogWarning("SendData: OnLoginGame");
         Message msg = new Message(CMD.LOGIN_GAME);
         msg.PutInt("userId", 0);
@@ -33,16 +33,66 @@ public class SendData
         SendMessage(msg);
     }
 
-    internal static void OnViewInfoPlayer(long userId)
-    {
-        // ShowLoadWait();
-        // Message msg = new Message(CMD.VIEW_INFO_PLAYER);
-        // msg.PutLong("userId", userId);
-        // SendMessage(msg);
-    }
-
     private static void ShowLoadWait(int time = 18)
     {
-        // SceneLoadFunction.Instance.ShowLoadWait(true, time);
+        LoadController.Instance.ShowCheckLoadWait(true, time);
+    }
+
+    internal static void FindMatch()
+    {
+        AgentUnity.LogWarning("SendData: FindMatch");
+        Message msg = new Message(CMD.FIND_MATCH);
+        SendMessage(msg);
+        GameStateManager.SetState(GameState.FINDING_MATCH);
+    }
+
+    internal static void CancelFindMatch()
+    {
+        AgentUnity.LogWarning("SendData: FindMatch");
+        Message msg = new Message(CMD.CANCEL_FIND_MATCH);
+        SendMessage(msg);
+    }
+
+    internal static void SelectHero(int heroType)
+    {
+        AgentUnity.LogWarning($"SendData: SelectHero type={heroType}");
+        Message msg = new Message(CMD.SELECT_HERO);
+        msg.PutInt("heroType", heroType);
+        SendMessage(msg);
+    }
+
+    // ========== MOVEMENT ==========
+
+    internal static void SendMovementInput(int dirX, int dirY, bool running, Vector3 position)
+    {
+        Message msg = new Message(CMD.MOVEMENT_INPUT);
+        msg.PutInt("dirX", dirX);
+        msg.PutInt("dirY", dirY);
+        msg.PutBool("running", running);
+        msg.PutInt("x", (int)(position.x)); // Convert Unity units to server units
+        msg.PutInt("y", (int)(position.z));
+        SendMessage(msg);
+    }
+
+    internal static void SendStop(Vector3 position)
+    {
+        Message msg = new Message(CMD.STOP_COMMAND);
+        msg.PutInt("x", (int)position.x);
+        msg.PutInt("y", (int)position.z);
+        SendMessage(msg);
+    }
+
+    // ========== COMBAT ==========
+
+    internal static void SendAttack(long targetId, int targetType, Vector3 position, int skillId)
+    {
+        AgentUnity.LogWarning($"SendData: Attack target={targetId} type={targetType}");
+        Message msg = new Message(CMD.ATTACK);
+        msg.PutLong("targetId", targetId);
+        msg.PutInt("targetType", targetType);
+        msg.PutInt("skillId", skillId);
+        msg.PutInt("x", (int)(position.x));
+        msg.PutInt("y", (int)(position.z));
+        SendMessage(msg);
     }
 }

@@ -17,12 +17,27 @@ public class ManualSingleton<T> : MonoBehaviour where T : ManualSingleton<T>
             return _instance;
         }
     }
+
+    // protected virtual void Awake()
+    // {
+    //     if (_instance != null && _instance.GetInstanceID() != GetInstanceID())
+    //         Destroy(gameObject);
+    //     else _instance = this as T;
+    // }
     
+    protected bool isDuplicate = false;
+
     protected virtual void Awake()
     {
         if (_instance != null && _instance.GetInstanceID() != GetInstanceID())
+        {
+            isDuplicate = true;
             Destroy(gameObject);
-        else _instance = this as T;
+            return;
+        }
+
+        _instance = this as T;
+        // DontDestroyOnLoad(gameObject);
     }
 
     protected virtual void OnDestroy()
