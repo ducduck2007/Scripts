@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections;
 
-public class PlayerMove : MonoBehaviour
+public class PlayerMove_OLD : MonoBehaviour
 {
     public float moveSpeed = 50f;
     public float gravity = -20f;
@@ -46,6 +46,7 @@ public class PlayerMove : MonoBehaviour
         public int damage = 1;
         public float duration = 1.2f;
         public float damageDelay = 0.3f;
+        public string animationBool = "isDanhThuong";
         public string animationTrigger = "Attack";
     }
 
@@ -53,7 +54,6 @@ public class PlayerMove : MonoBehaviour
 
     private bool isNormalAttacking;
     private bool isSkillCasting;
-    private bool isHit;
     public Canvas Canvas;
 
     private Transform target;
@@ -67,15 +67,12 @@ public class PlayerMove : MonoBehaviour
             HealthBar.transform.SetParent(Canvas.transform);
             HealthBar.color = Color.green;
         }
-
-        // Reset tất cả trạng thái animator
-        ResetAllAnimatorStates();
     }
 
     void Update()
     {
         // Tắt root motion khi đánh để code tự kiểm soát hướng
-        animator.applyRootMotion = !(isNormalAttacking || isSkillCasting || isHit);
+        animator.applyRootMotion = !(isNormalAttacking || isSkillCasting);
 
         if ((isNormalAttacking || isSkillCasting) && target != null)
         {
@@ -85,7 +82,7 @@ public class PlayerMove : MonoBehaviour
         if (!IsBusy())
             Move();
         else
-            SetAnimatorSpeed(0f); // Dừng di chuyển khi đang trong trạng thái bận
+            SetAnimatorWalking(false);
     }
 
     #region NORMAL ATTACK
@@ -116,8 +113,7 @@ public class PlayerMove : MonoBehaviour
 
         ResetCombatStates();
         isNormalAttacking = true;
-        // animator.SetTrigger(normalAttackConfig.animationTrigger);
-        animator.SetBool("isAttack", true);
+        animator.SetBool(normalAttackConfig.animationBool, true);
         Invoke(nameof(AutoResetNormalAttack), normalAttackConfig.duration);
     }
 
@@ -144,13 +140,47 @@ public class PlayerMove : MonoBehaviour
     {
         if (!isNormalAttacking) return;
 
-        animator.SetBool("isAttack", false);
+        animator.SetBool(normalAttackConfig.animationBool, false);
         isNormalAttacking = false;
-        UpdateMovementAnimation();
+        UpdateWalkingAnimation();
     }
     #endregion
 
     #region SKILLS
+    // public void CastSkill(int skill)
+    // {
+    //     FindTargetInRange(normalAttackConfig.attackRange);
+    //     if (IsBusy()) return;
+
+    //     if (target != null)
+    //     {
+    //         RotateToTarget();
+    //     }
+
+    //     isSkillCasting = true;
+
+    //     if (skill == 1) currentSkillCfg = skill1;
+    //     else if (skill == 2) currentSkillCfg = skill2;
+    //     else if (skill == 3) currentSkillCfg = skill3;
+    //     else return;
+
+    //     if (!string.IsNullOrEmpty(currentSkillCfg.animationBool))
+    //     {
+    //         animator.SetBool("isWalking", false);
+    //         animator.SetBool(currentSkillCfg.animationBool, true);
+
+    //         Invoke(nameof(EndSkillAnimationWrapper), currentSkillCfg.animationDuration);
+    //     }
+    //     Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
+    //     if (skill != 3)
+    //     {
+    //         Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
+    //     }
+    //     else
+    //     {
+    //         Invoke(nameof(SpawnSkillWrapper2), currentSkillCfg.delaySpawn);
+    //     }
+    // }
     public void CastSkill(int skill)
     {
         FindTargetInRange(normalAttackConfig.attackRange);
@@ -169,23 +199,8 @@ public class PlayerMove : MonoBehaviour
 
         if (!string.IsNullOrEmpty(currentSkillCfg.animationBool))
         {
-            // Tắt trạng thái di chuyển
-            SetAnimatorSpeed(0f);
-
-            // Set bool cho skill tương ứng
-            switch (skill)
-            {
-                case 1:
-                    animator.SetBool("isSkill1", true);
-                    break;
-                case 2:
-                    animator.SetBool("isSkill2", true);
-                    break;
-                case 3:
-                    animator.SetBool("isSkill3", true);
-                    break;
-            }
-
+            animator.SetBool("isWalking", false);
+            animator.SetBool(currentSkillCfg.animationBool, true);
             Invoke(nameof(EndSkillAnimationWrapper), currentSkillCfg.animationDuration);
         }
 
@@ -201,14 +216,9 @@ public class PlayerMove : MonoBehaviour
         isSkillCasting = false;
 
         if (currentSkillCfg != null && !string.IsNullOrEmpty(currentSkillCfg.animationBool))
-        {
-            // Reset tất cả bool skill
-            animator.SetBool("isSkill1", false);
-            animator.SetBool("isSkill2", false);
-            animator.SetBool("isSkill3", false);
-        }
+            animator.SetBool(currentSkillCfg.animationBool, false);
 
-        UpdateMovementAnimation();
+        UpdateWalkingAnimation();
     }
 
     private void SpawnSkillWrapper()
@@ -218,6 +228,15 @@ public class PlayerMove : MonoBehaviour
             Instantiate(currentSkillCfg.prefab, parentSkill.position, parentSkill.rotation);
         }
     }
+
+
+    // private void SpawnSkillWrapper2()
+    // {
+    //     if (currentSkillCfg != null && currentSkillCfg.prefab != null)
+    //     {
+    //         Instantiate(currentSkillCfg.prefab, TranDauControl.Instance.playerOther.transform.position, TranDauControl.Instance.playerOther.transform.rotation);
+    //     }
+    // }
 
     private void SpawnSkillWrapper2()
     {
@@ -290,25 +309,6 @@ public class PlayerMove : MonoBehaviour
             rotateSpeed * Time.deltaTime
         );
     }
-
-    // Gọi khi nhận sát thương
-    public void TakeHit()
-    {
-        if (isHit || !isAlive) return;
-
-        isHit = true;
-        animator.SetBool("isHit", true);
-
-        // Reset sau 0.5 giây (có thể điều chỉnh)
-        Invoke(nameof(ResetHitState), 0.5f);
-    }
-
-    private void ResetHitState()
-    {
-        isHit = false;
-        animator.SetBool("isHit", false);
-        UpdateMovementAnimation();
-    }
     #endregion
 
     #region MOVEMENT
@@ -347,10 +347,7 @@ public class PlayerMove : MonoBehaviour
         Vector3 direction = new Vector3(input.x, 0, input.y);
 
         bool hasInput = direction.magnitude > 0.1f;
-
-        // Set speed parameter cho blend tree
-        float speedValue = hasInput ? 1f : 0f;
-        SetAnimatorSpeed(speedValue);
+        animator.SetBool("isWalking", hasInput);
 
         if (hasInput)
         {
@@ -365,7 +362,6 @@ public class PlayerMove : MonoBehaviour
 
         velocity.y += gravity * Time.deltaTime;
         controller.Move(velocity * Time.deltaTime);
-
         if (GameStateManager.IsInGame())
         {
             if (Time.time - lastInputTime >= inputInterval)
@@ -393,43 +389,22 @@ public class PlayerMove : MonoBehaviour
             }
         }
     }
-
     private float lastInputTime = 0f;
     private float inputInterval = 0.05f;
     private Vector2 lastInput = Vector2.zero;
 
     #endregion
 
+
     #region STATE + GIZMOS
-    private bool IsBusy() => isNormalAttacking || isSkillCasting || isHit;
-    private bool IsInCombatState() => isNormalAttacking || isSkillCasting || isHit;
+    private bool IsBusy() => isNormalAttacking || isSkillCasting;
+    private bool IsInCombatState() => isNormalAttacking || isSkillCasting;
 
-    private void UpdateMovementAnimation()
+    private void UpdateWalkingAnimation()
     {
-        if (IsBusy()) return;
-
         Vector2 input = MenuController.Instance.joystick.inputVector;
-        float speedValue = input.magnitude > 0.1f ? 1f : 0f;
-        SetAnimatorSpeed(speedValue);
+        SetAnimatorWalking(input.magnitude > 0.1f);
     }
-
-    private void SetAnimatorSpeed(float speed)
-    {
-        animator.SetFloat("Speed", speed);
-    }
-
-    private void ResetAllAnimatorStates()
-    {
-        animator.SetFloat("Speed", 0f);
-        animator.SetBool("isAttack", false);
-        animator.SetBool("isSkill1", false);
-        animator.SetBool("isSkill2", false);
-        animator.SetBool("isSkill3", false);
-        animator.SetBool("isHit", false);
-        animator.SetBool("isDeath", false);
-        // animator.ResetTrigger("Death");
-    }
-
     public void ApplyServerData(PlayerOutPutSv data)
     {
         isAlive = data.isAlive;
@@ -453,21 +428,27 @@ public class PlayerMove : MonoBehaviour
         }
     }
 
+    private void SetAnimatorWalking(bool isWalking)
+    {
+        animator.SetBool("isWalking", isWalking);
+    }
+
     private void ResetCombatStates()
     {
         CancelInvoke(nameof(AutoResetNormalAttack));
-        CancelInvoke(nameof(ResetHitState));
         isNormalAttacking = false;
-        isHit = false;
     }
+
+
 
     public void onDeath()
     {
-        isAlive = false;
-        ResetAllAnimatorStates();
-        // animator.SetTrigger("isDeath");
+        animator.SetBool("isWalking", false);
+        animator.SetBool("isDanhThuong", false);
+        animator.SetBool("isTungChieu", false);
+        animator.SetBool("isSkill2", false);
+        animator.SetBool("isSkill3", false);
         animator.SetBool("isDeath", true);
-
         if (HealthBar != null)
         {
             HealthBar.gameObject.SetActive(false);
@@ -476,11 +457,8 @@ public class PlayerMove : MonoBehaviour
 
     public void onRespawn(int hp)
     {
-        isAlive = true;
         animator.SetBool("isDeath", false);
-        ResetAllAnimatorStates();
         SetPotion();
-
         if (HealthBar != null)
         {
             HealthBar.gameObject.SetActive(true);
@@ -495,4 +473,6 @@ public class PlayerMove : MonoBehaviour
         Gizmos.DrawWireSphere(controller.transform.position, normalAttackConfig.attackRange);
     }
     #endregion
+
+    // private ActorVisibility visibility;
 }
