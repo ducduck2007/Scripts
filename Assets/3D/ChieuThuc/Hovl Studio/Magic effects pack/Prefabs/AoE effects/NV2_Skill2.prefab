@@ -4912,7 +4912,7 @@ GameObject:
   - component: {fileID: 7300370712328689879}
   - component: {fileID: 5629871898439004863}
   m_Layer: 0
-  m_Name: Star hit (1)
+  m_Name: Star hit
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4927,7 +4927,7 @@ Transform:
   m_GameObject: {fileID: 784098323541555214}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 197, y: 238, z: 174}
+  m_LocalPosition: {x: 26, y: 110, z: 244}
   m_LocalScale: {x: 70, y: 70, z: 70}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -9830,7 +9830,7 @@ Transform:
   m_GameObject: {fileID: 2495831983320307179}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 197, y: 1, z: 174}
+  m_LocalPosition: {x: 26, y: 200, z: 244}
   m_LocalScale: {x: 70, y: 70, z: 70}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -29424,7 +29424,7 @@ Transform:
   m_GameObject: {fileID: 3222486451468416341}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 197, y: 123, z: 174}
+  m_LocalPosition: {x: 26, y: 163, z: 244}
   m_LocalScale: {x: 70, y: 70, z: 70}
   m_ConstrainProportionsScale: 0
   m_Children:
