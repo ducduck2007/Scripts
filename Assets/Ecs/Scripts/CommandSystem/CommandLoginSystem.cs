@@ -22,10 +22,10 @@ public class CommandLoginSystem : BaseCommandSystem
             AgentUnity.LogWarning("CMD: LOGIN_GAME = 0" + msg.GetJson());
             if (CheckSuccess(msg))
             {
-                B.Instance.UserID = msg.GetLong("userId");
-                string userName = msg.GetString("userName");
-                int level = msg.GetInt("level");
-                int avatarId = msg.GetInt("avatarId");
+                UserData.Instance.UserID = msg.GetLong("userId");
+                UserData.Instance.UserName = msg.GetString("userName");
+                UserData.Instance.Level = msg.GetInt("level");
+                UserData.Instance.AvatarId = msg.GetInt("avatarId");
                 int wins = msg.GetInt("wins");      
                 int losses = msg.GetInt("losses");
                 AgentUnity.SetString(KeyLocalSave.PP_USERNAME, B.Instance.UserName);

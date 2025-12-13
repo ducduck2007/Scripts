@@ -22,7 +22,7 @@ public class CommandRespawnSystem : BaseCommandSystem
             float y = msg.GetFloat("y");
             int hp = msg.GetInt("hp");
 
-            if (userId == B.Instance.UserID)
+            if (userId == UserData.Instance.UserID)
             {
                 B.Instance.PosX = x;
                 B.Instance.PosZ = y;

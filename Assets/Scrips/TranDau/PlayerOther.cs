@@ -40,6 +40,10 @@ public class PlayerOther : MonoBehaviour
 
     public float hpMax;
     public float hpCurrent;
+
+    // Thêm biến để lưu target cho skill 3
+    private Transform target;
+
     void Start()
     {
         if (HealthBar != null)
@@ -145,12 +149,34 @@ public class PlayerOther : MonoBehaviour
         else if (skill == 3) currentSkillCfg = skill3;
         else return;
 
-        if (hasTarget)
+        // Tìm target nếu có (giống PlayerMove)
+        if (hasTarget && TranDauControl.Instance.playerMove != null)
         {
+            target = TranDauControl.Instance.playerMove.transform;
             RotateToTarget();
+
+            // Chỉ skill 3 spawn theo logic đặc biệt
             if (skill == 3)
             {
-                Invoke(nameof(SpawnSkillWrapper2), currentSkillCfg.delaySpawn);
+                Invoke(nameof(SpawnSkillWrapper3), currentSkillCfg.delaySpawn);
+            }
+            else
+            {
+                // Skill 1 và 2 spawn bình thường
+                Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
+            }
+        }
+        else
+        {
+            // Không có target, spawn theo hướng hiện tại (giống PlayerMove khi không có target)
+            target = null;
+            if (skill == 3)
+            {
+                Invoke(nameof(SpawnSkillWrapper3), currentSkillCfg.delaySpawn);
+            }
+            else
+            {
+                Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
             }
         }
 
@@ -160,17 +186,6 @@ public class PlayerOther : MonoBehaviour
             animator.SetBool(currentSkillCfg.animationBool, true);
             Invoke(nameof(EndSkillAnimationWrapper), currentSkillCfg.animationDuration);
         }
-
-        // Spawn skill sau delay
-        Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
-        // if (skill != 3)
-        // {
-        //     Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
-        // }
-        // else
-        // {
-        //     Invoke(nameof(SpawnSkillWrapper2), currentSkillCfg.delaySpawn);
-        // }
     }
 
     private void EndSkillAnimationWrapper()
@@ -187,12 +202,36 @@ public class PlayerOther : MonoBehaviour
         }
     }
 
-    private void SpawnSkillWrapper2()
+    // Thêm hàm mới cho skill 3 với logic giống PlayerMove
+    private void SpawnSkillWrapper3()
     {
-        if (currentSkillCfg != null && currentSkillCfg.prefab != null)
+        if (currentSkillCfg == null || currentSkillCfg.prefab == null)
         {
-            Instantiate(currentSkillCfg.prefab, TranDauControl.Instance.playerMove.transform.position, TranDauControl.Instance.playerMove.transform.rotation);
+            Debug.LogWarning("Skill 3 spawn failed: prefab null");
+            return;
         }
+
+        Vector3 spawnPos;
+        Quaternion spawnRot;
+
+        if (target != null)
+        {
+            // Spawn vào vị trí mục tiêu (player chính)
+            spawnPos = target.position;
+            spawnRot = Quaternion.LookRotation(target.position - transform.position);
+        }
+        else
+        {
+            // Không có target → spawn về phía trước mặt 1 khoảng
+            // Giả sử tầm đánh là 3 (giống PlayerMove)
+            int attackRange = 3;
+            spawnPos = transform.position + transform.forward * attackRange;
+            spawnRot = transform.rotation;
+        }
+
+        Instantiate(currentSkillCfg.prefab, spawnPos, spawnRot);
+
+        Debug.Log("Skill 3 spawned at: " + spawnPos);
     }
 
     public void onDeath()
@@ -255,6 +294,7 @@ public class PlayerOther : MonoBehaviour
 
         return hash.ToString(); // fallback
     }
+
     void ForceResetAnimator()
     {
         animator.SetBool("isDanhThuong", false);
@@ -265,8 +305,6 @@ public class PlayerOther : MonoBehaviour
         animator.Play("Idle", 0, 0f);
 
         stuckTimer = 0f;
-
     }
-
     // ======================================================================
 }

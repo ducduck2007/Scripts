@@ -62,7 +62,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         }
         foreach (var pdata in playersData)
         {
-            if (pdata.userId == B.Instance.UserID)
+            if (pdata.userId == UserData.Instance.UserID)
             {
                 playerMove.ApplyServerData(pdata);
                 if (pdata.teamId == 1)

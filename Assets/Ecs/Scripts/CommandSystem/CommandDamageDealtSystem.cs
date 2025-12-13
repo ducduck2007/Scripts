@@ -23,9 +23,9 @@ public class CommandDamageDealtSystem : BaseCommandSystem
             int remainingHp = msg.GetInt("remainingHp");
             int skillId = msg.GetInt("skillId");
 
-            if (attackerId != B.Instance.UserID)
+            if (attackerId != UserData.Instance.UserID)
             {
-                if (targetId != B.Instance.UserID)
+                if (targetId != UserData.Instance.UserID)
                 {
                     if (skillId == 0)
                     {

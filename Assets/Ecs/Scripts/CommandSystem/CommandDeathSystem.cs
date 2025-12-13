@@ -24,7 +24,7 @@ public class CommandDeathSystem : BaseCommandSystem
             int timeReBorn = msg.GetInt("timeReBorn");
             Debug.Log($"{victimId} killed by {killerName}");
 
-            if (victimId == B.Instance.UserID)
+            if (victimId == UserData.Instance.UserID)
             {
                 TranDauControl.Instance.playerMove.onDeath();
             }

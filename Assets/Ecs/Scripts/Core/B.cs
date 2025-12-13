@@ -25,7 +25,6 @@ internal class B
     
     internal string UserName { get; set; }
     internal string PassWord { get; set; }
-    internal long UserID { get; set; }
     internal long UserIdCong { get; set; }
     internal string Keyhash { get; set; }
     internal string ServerIdSelect { get; set; }
