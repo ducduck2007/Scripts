@@ -3,7 +3,10 @@ using UnityEngine;
 public class PlayerOther : MonoBehaviour
 {
     public Animator animator;
-
+    
+    // THÊM BIẾN TEAM ID
+    public int teamId = 0; // Mặc định là 0, cần set từ server
+    
     private Vector3 targetPos;
     private Quaternion targetRot;
     private bool isAlive;
@@ -69,6 +72,12 @@ public class PlayerOther : MonoBehaviour
             HealthBar.color = Color.red;
         }
     }
+    
+    // THÊM HÀM SET TEAM ID
+    public void SetTeamId(int teamId)
+    {
+        this.teamId = teamId;
+    }
 
     public void SetHp(int hp, int maxHp)
     {
@@ -93,6 +102,9 @@ public class PlayerOther : MonoBehaviour
         targetRot = Quaternion.Euler(0, data.heading, 0);
         isAlive = data.isAlive;
         SetHp(data.hp, data.maxHp);
+        
+        // THÊM SET TEAM ID TỪ SERVER NẾU CÓ
+        // if (data.teamId != 0) SetTeamId(data.teamId);
     }
 
     public void SetAttackState(bool isAttack, bool hasTarget)
@@ -105,7 +117,7 @@ public class PlayerOther : MonoBehaviour
         // Xoay về target nếu có - giống PlayerMove
         if (target != null)
         {
-            RotateToTarget();
+            RotateToTargetInstant(); // Xoay tức thời khi bắt đầu đánh
         }
         else
         {
@@ -134,42 +146,18 @@ public class PlayerOther : MonoBehaviour
         Invoke(nameof(AutoResetNormalAttack), normalAttackConfig.duration);
     }
 
-    // Sửa RotateToTarget giống PlayerMove - XOAY TỨC THỜI, KHÔNG SMOOTH
-    private void RotateToTarget()
+    // Xoay tức thời khi bắt đầu đánh/skill (giống PlayerMove)
+    private void RotateToTargetInstant()
     {
-        if (target == null)
-        {
-            // Nếu không có target, tìm lại
-            FindTargetInRange(normalAttackConfig.attackRange);
-            if (target == null) return;
-        }
+        if (target == null) return;
 
         Vector3 dir = target.position - transform.position;
         dir.y = 0;
 
         if (dir.sqrMagnitude < 0.01f) return;
 
-        // Sử dụng cùng logic quay như PlayerMove
-        Quaternion targetRotation = Quaternion.LookRotation(dir);
-
-        if (IsBusy())
-        {
-            // Khi đang đánh/skill: quay tức thời
-            transform.rotation = targetRotation;
-        }
-        else
-        {
-            // Khi không busy: quay mượt
-            transform.rotation = Quaternion.Slerp(
-                transform.rotation,
-                targetRotation,
-                rotateSmooth * Time.deltaTime
-            );
-        }
-
-        Debug.Log($"PlayerOther rotated to target: {target.position}, " +
-                 $"Direction: {dir.normalized}, " +
-                 $"Angle: {transform.rotation.eulerAngles.y}");
+        // QUAY TỨC THỜI VỀ HƯỚNG TARGET khi bắt đầu đánh/skill
+        transform.rotation = Quaternion.LookRotation(dir);
     }
 
     private void AutoResetNormalAttack()
@@ -198,15 +186,10 @@ public class PlayerOther : MonoBehaviour
         DetectAnimatorStuck();
         transform.position = Vector3.Lerp(transform.position, targetPos, moveSmooth * Time.deltaTime);
 
-        // Chỉ smooth rotation khi không busy và KHÔNG CÓ MỤC TIÊU TRONG TẦM
-        if (!IsBusy() && !HasTargetInRange())
+        // Chỉ smooth rotation theo server khi không busy
+        if (!IsBusy())
         {
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSmooth * Time.deltaTime);
-        }
-        else if (HasTargetInRange())
-        {
-            // Tự động quay về mục tiêu nếu trong tầm (giống PlayerMove)
-            RotateToTarget();
         }
 
         // Check movement speed giống PlayerMove
@@ -225,41 +208,83 @@ public class PlayerOther : MonoBehaviour
         }
     }
 
-    // THÊM HÀM KIỂM TRA MỤC TIÊU TRONG TẦM (giống PlayerMove)
-    private bool HasTargetInRange()
-    {
-        Collider[] hits = Physics.OverlapSphere(transform.position,
-                                               normalAttackConfig.attackRange,
-                                               enemyLayer);
-        return hits.Length > 0;
-    }
-
+    // SỬA LẠI HÀM FindTargetInRange ĐỂ TÌM ĐÚNG MỤC TIÊU
     private void FindTargetInRange(float range)
     {
-        // Dùng Physics.OverlapSphere giống PlayerMove
-        Collider[] hits = Physics.OverlapSphere(transform.position, range, enemyLayer);
-
+        // Tìm tất cả PlayerMove và PlayerOther trong scene
+        PlayerMove[] allPlayerMoves = FindObjectsOfType<PlayerMove>();
+        PlayerOther[] allPlayerOthers = FindObjectsOfType<PlayerOther>();
+        
         target = null;
         float minDist = Mathf.Infinity;
 
-        foreach (var h in hits)
+        // Kiểm tra PlayerMove trước
+        foreach (var playerMove in allPlayerMoves)
         {
-            float d = Vector3.Distance(transform.position, h.transform.position);
-            if (d < minDist)
+            // Nếu teamId đã được set, kiểm tra team khác nhau
+            if (teamId != 0 && GetTeamIdFromPlayerMove(playerMove) == teamId)
+                continue; // Bỏ qua đồng đội
+                
+            float distance = Vector3.Distance(transform.position, playerMove.transform.position);
+            if (distance <= range && distance < minDist)
             {
-                minDist = d;
-                target = h.transform;
+                minDist = distance;
+                target = playerMove.transform;
             }
         }
-
-        if (target != null)
+        
+        // Kiểm tra PlayerOther
+        foreach (var playerOther in allPlayerOthers)
         {
-            Debug.Log($"PlayerOther found target: {target.name} at distance: {minDist}");
+            // Bỏ qua chính mình
+            if (playerOther == this) continue;
+            
+            // Kiểm tra team khác nhau nếu có teamId
+            if (teamId != 0 && playerOther.teamId == teamId)
+                continue; // Bỏ qua đồng đội
+                
+            float distance = Vector3.Distance(transform.position, playerOther.transform.position);
+            if (distance <= range && distance < minDist)
+            {
+                minDist = distance;
+                target = playerOther.transform;
+            }
         }
-        else
+        
+        // Fallback: nếu không tìm thấy, thử dùng Physics.OverlapSphere
+        if (target == null)
         {
-            Debug.Log("PlayerOther: No target found in range");
+            Collider[] hits = Physics.OverlapSphere(transform.position, range, enemyLayer);
+            
+            foreach (var hit in hits)
+            {
+                // Bỏ qua chính mình
+                if (hit.transform == this.transform) continue;
+                
+                float distance = Vector3.Distance(transform.position, hit.transform.position);
+                if (distance < minDist)
+                {
+                    minDist = distance;
+                    target = hit.transform;
+                }
+            }
         }
+    }
+    
+    // HÀM LẤY TEAM ID TỪ PlayerMove (nếu có)
+    private int GetTeamIdFromPlayerMove(PlayerMove playerMove)
+    {
+        // Kiểm tra xem playerMove có thuộc tính teamId không
+        // Nếu không có, bạn có thể thêm vào PlayerMove hoặc dùng cách khác
+        if (MenuController.Instance != null)
+        {
+            // Nếu playerMove là player1 trong MenuController
+            if (playerMove == MenuController.Instance.player1 && B.Instance != null)
+                return 1;
+            else if (playerMove == MenuController.Instance.player2 && B.Instance != null)
+                return 2;
+        }
+        return 0; // Mặc định
     }
 
     public void CastSkillFromServer(int skill, bool hasTarget)
@@ -269,20 +294,19 @@ public class PlayerOther : MonoBehaviour
         else if (skill == 3) currentSkillCfg = skill3;
         else return;
 
-        // Tìm target trong tầm skill (có thể dùng range lớn hơn cho skill)
-        float skillRange = normalAttackConfig.attackRange; // Có thể thay đổi theo từng skill
+        // Tìm target trong tầm skill
+        float skillRange = normalAttackConfig.attackRange;
         FindTargetInRange(skillRange);
 
-        // Xoay về target nếu có
+        // Xoay về target nếu có - XOAY TỨC THỜI khi bắt đầu skill
         if (target != null)
         {
-            RotateToTarget();
+            RotateToTargetInstant();
         }
         else
         {
             // Nếu không có target, quay về hướng server gửi
             transform.rotation = targetRot;
-            Debug.Log($"Skill {skill} - No target in range, using server rotation");
         }
 
         // Set trạng thái skill
@@ -345,12 +369,10 @@ public class PlayerOther : MonoBehaviour
         }
     }
 
-    // Sửa hàm SpawnSkillWrapper3
     private void SpawnSkillWrapper3()
     {
         if (currentSkillCfg == null || currentSkillCfg.prefab == null)
         {
-            Debug.LogWarning("Skill 3 spawn failed: prefab null");
             return;
         }
 
@@ -366,7 +388,7 @@ public class PlayerOther : MonoBehaviour
         else
         {
             // Không có target → spawn về phía trước mặt 1 khoảng
-            spawnPos = transform.position + transform.forward * 400f; // Dùng range lớn cho skill 3
+            spawnPos = transform.position + transform.forward * 400f;
             spawnRot = transform.rotation;
         }
 
@@ -476,12 +498,10 @@ public class PlayerOther : MonoBehaviour
         lastStateName = "";
     }
 
-    // Thêm hàm vẽ Gizmos giống PlayerMove (tùy chọn)
     void OnDrawGizmosSelected()
     {
         if (transform == null) return;
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, normalAttackConfig.attackRange);
     }
-    // ======================================================================
 }

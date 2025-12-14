@@ -295,6 +295,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Maria (9)
       objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -430,6 +434,10 @@ PrefabInstance:
     - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
       propertyPath: m_Name
       value: Maria (10)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1398,6 +1406,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Maria (2)
       objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1458,6 +1470,10 @@ PrefabInstance:
     - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
       propertyPath: m_Name
       value: Maria (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1861,6 +1877,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Maria (8)
       objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2042,6 +2062,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Maria (6)
       objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2102,6 +2126,10 @@ PrefabInstance:
     - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
       propertyPath: m_Name
       value: Maria (7)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2168,6 +2196,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Maria (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2196,7 +2228,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!64 &1375327655
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -2634,6 +2666,10 @@ PrefabInstance:
     - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
       propertyPath: m_Name
       value: Maria (5)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3207,6 +3243,10 @@ PrefabInstance:
     - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
       propertyPath: m_Name
       value: Maria (4)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8703349831204689570, guid: d182880c1a1ccbd4187d2752bdd86bd7, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -48841,7 +48881,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!95 &3986187838677313274
 Animator:
   serializedVersion: 7
