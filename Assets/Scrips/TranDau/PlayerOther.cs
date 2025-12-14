@@ -41,8 +41,12 @@ public class PlayerOther : MonoBehaviour
     public float hpMax;
     public float hpCurrent;
 
-    // Thêm biến để lưu target cho skill 3
+    // Thêm các biến giống PlayerMove
+    private bool isNormalAttacking;
+    private bool isSkillCasting;
+    private bool isHit;
     private Transform target;
+    private Vector3 velocity;
 
     void Start()
     {
@@ -82,46 +86,69 @@ public class PlayerOther : MonoBehaviour
     {
         if (!isAttack) return;
 
-        if (hasTarget)
+        // Tìm target nếu có
+        if (hasTarget && TranDauControl.Instance.playerMove != null)
+        {
+            target = TranDauControl.Instance.playerMove.transform;
+        }
+        else
+        {
+            target = null;
+        }
+
+        // Xoay về target nếu có
+        if (target != null)
         {
             RotateToTarget();
         }
 
-        serverIsAttack = true;
-
-        // dùng skillNormal
+        // Dùng skillNormal
         currentSkillCfg = skillNormal;
 
-        // bật animation nếu có
+        // Set trạng thái tấn công
+        isNormalAttacking = true;
+        serverIsAttack = true;
+
+        // Bật animation nếu có
         if (!string.IsNullOrEmpty(currentSkillCfg.animationBool))
         {
-            animator.SetBool(currentSkillCfg.animationBool, true);
+            animator.SetBool("isAttack", true); // Giống PlayerMove
             Invoke(nameof(EndSkillAnimationWrapper), currentSkillCfg.animationDuration);
         }
 
-        // spawn prefab
+        // Spawn prefab
         Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
 
-        // Reset attack state (nếu vẫn muốn)
-        Invoke(nameof(EndNormalAttack), 1.5f);
+        // Auto reset sau duration
+        Invoke(nameof(AutoResetNormalAttack), 1.2f); // Dùng duration giống PlayerMove
     }
 
     private void RotateToTarget()
     {
-        if (TranDauControl.Instance.playerMove == null) return;
+        if (target == null) return;
 
-        Vector3 dir = TranDauControl.Instance.playerMove.transform.position - transform.position;
+        Vector3 dir = target.position - transform.position;
         dir.y = 0;
 
         if (dir.sqrMagnitude > 0.01f)
         {
             Quaternion lookRot = Quaternion.LookRotation(dir);
-            transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, 20f * Time.deltaTime);
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, rotateSmooth * Time.deltaTime);
         }
+    }
+
+    private void AutoResetNormalAttack()
+    {
+        if (isNormalAttacking)
+            EndNormalAttack();
     }
 
     private void EndNormalAttack()
     {
+        if (!isNormalAttacking) return;
+
+        animator.SetBool("isAttack", false);
+        isNormalAttacking = false;
         serverIsAttack = false;
     }
 
@@ -137,9 +164,20 @@ public class PlayerOther : MonoBehaviour
         transform.position = Vector3.Lerp(transform.position, targetPos, moveSmooth * Time.deltaTime);
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSmooth * Time.deltaTime);
 
-        // Check walking by target distance
-        bool isWalking = Vector3.Distance(transform.position, targetPos) > 0.05f;
-        animator.SetBool("isWalking", isWalking);
+        // Check movement speed giống PlayerMove
+        Vector3 moveVector = (targetPos - transform.position);
+        moveVector.y = 0;
+        float speedValue = moveVector.magnitude > 0.05f ? 1f : 0f;
+
+        // Chỉ set speed khi không busy (giống PlayerMove)
+        if (!IsBusy())
+        {
+            SetAnimatorSpeed(speedValue);
+        }
+        else
+        {
+            SetAnimatorSpeed(0f); // Dừng di chuyển khi đang trong trạng thái bận
+        }
     }
 
     public void CastSkillFromServer(int skill, bool hasTarget)
@@ -153,45 +191,68 @@ public class PlayerOther : MonoBehaviour
         if (hasTarget && TranDauControl.Instance.playerMove != null)
         {
             target = TranDauControl.Instance.playerMove.transform;
-            RotateToTarget();
-
-            // Chỉ skill 3 spawn theo logic đặc biệt
-            if (skill == 3)
-            {
-                Invoke(nameof(SpawnSkillWrapper3), currentSkillCfg.delaySpawn);
-            }
-            else
-            {
-                // Skill 1 và 2 spawn bình thường
-                Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
-            }
         }
         else
         {
-            // Không có target, spawn theo hướng hiện tại (giống PlayerMove khi không có target)
             target = null;
-            if (skill == 3)
-            {
-                Invoke(nameof(SpawnSkillWrapper3), currentSkillCfg.delaySpawn);
-            }
-            else
-            {
-                Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
-            }
         }
+
+        // Xoay về target nếu có
+        if (target != null)
+        {
+            RotateToTarget();
+        }
+
+        // Set trạng thái skill
+        isSkillCasting = true;
 
         // Bật animation skill nếu có
         if (!string.IsNullOrEmpty(currentSkillCfg.animationBool))
         {
-            animator.SetBool(currentSkillCfg.animationBool, true);
+            // Tắt trạng thái di chuyển
+            SetAnimatorSpeed(0f);
+
+            // Set bool cho skill tương ứng giống PlayerMove
+            switch (skill)
+            {
+                case 1:
+                    animator.SetBool("isSkill1", true);
+                    break;
+                case 2:
+                    animator.SetBool("isSkill2", true);
+                    break;
+                case 3:
+                    animator.SetBool("isSkill3", true);
+                    break;
+            }
+
             Invoke(nameof(EndSkillAnimationWrapper), currentSkillCfg.animationDuration);
+        }
+
+        // Spawn skill
+        if (skill == 3)
+        {
+            Invoke(nameof(SpawnSkillWrapper3), currentSkillCfg.delaySpawn);
+        }
+        else
+        {
+            Invoke(nameof(SpawnSkillWrapper), currentSkillCfg.delaySpawn);
         }
     }
 
     private void EndSkillAnimationWrapper()
     {
+        // Reset trạng thái skill
+        isSkillCasting = false;
+
         if (currentSkillCfg != null && !string.IsNullOrEmpty(currentSkillCfg.animationBool))
-            animator.SetBool(currentSkillCfg.animationBool, false);
+        {
+            // Reset tất cả bool skill giống PlayerMove
+            animator.SetBool("isAttack", false);
+            animator.SetBool("isSkill1", false);
+            animator.SetBool("isSkill2", false);
+            animator.SetBool("isSkill3", false);
+        }
     }
 
     private void SpawnSkillWrapper()
@@ -234,14 +295,25 @@ public class PlayerOther : MonoBehaviour
         Debug.Log("Skill 3 spawned at: " + spawnPos);
     }
 
+    // Hàm Set Animator Speed giống PlayerMove
+    private void SetAnimatorSpeed(float speed)
+    {
+        animator.SetFloat("Speed", speed);
+    }
+
+    // Hàm kiểm tra trạng thái bận giống PlayerMove
+    private bool IsBusy() => isNormalAttacking || isSkillCasting || isHit;
+
     public void onDeath()
     {
-        animator.SetBool("isWalking", false);
-        animator.SetBool("isDanhThuong", false);
-        animator.SetBool("isTungChieu", false);
+        // Reset tất cả trạng thái giống PlayerMove
+        SetAnimatorSpeed(0f);
+        animator.SetBool("isAttack", false);
+        animator.SetBool("isSkill1", false);
         animator.SetBool("isSkill2", false);
         animator.SetBool("isSkill3", false);
         animator.SetBool("isDeath", true);
+
         if (HealthBar != null)
         {
             HealthBar.gameObject.SetActive(false);
@@ -281,7 +353,7 @@ public class PlayerOther : MonoBehaviour
         if (stateName == "Idle" || stateName == "Walking")
             return;
 
-        // Nếu animation chiến đấu chạy >1.5s → coi như bị kẹt
+        // Nếu animation chiến đấu chạy >5s → coi như bị kẹt
         if (stuckTimer > 5f)
         {
             ForceResetAnimator();
@@ -297,12 +369,19 @@ public class PlayerOther : MonoBehaviour
 
     void ForceResetAnimator()
     {
-        animator.SetBool("isDanhThuong", false);
-        animator.SetBool("isTungChieu", false);
+        // Reset tất cả trạng thái giống PlayerMove
+        SetAnimatorSpeed(0f);
+        animator.SetBool("isAttack", false);
+        animator.SetBool("isSkill1", false);
         animator.SetBool("isSkill2", false);
         animator.SetBool("isSkill3", false);
 
         animator.Play("Idle", 0, 0f);
+
+        // Reset các biến trạng thái
+        isNormalAttacking = false;
+        isSkillCasting = false;
+        isHit = false;
 
         stuckTimer = 0f;
     }
