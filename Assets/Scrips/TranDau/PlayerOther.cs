@@ -105,7 +105,7 @@ public class PlayerOther : MonoBehaviour
         // Xoay về target nếu có - giống PlayerMove
         if (target != null)
         {
-            RotateToTargetInstant(); // Xoay tức thời khi bắt đầu đánh
+            RotateToTarget();
         }
         else
         {
@@ -134,18 +134,42 @@ public class PlayerOther : MonoBehaviour
         Invoke(nameof(AutoResetNormalAttack), normalAttackConfig.duration);
     }
 
-    // Xoay tức thời khi bắt đầu đánh/skill (giống PlayerMove)
-    private void RotateToTargetInstant()
+    // Sửa RotateToTarget giống PlayerMove - XOAY TỨC THỜI, KHÔNG SMOOTH
+    private void RotateToTarget()
     {
-        if (target == null) return;
+        if (target == null)
+        {
+            // Nếu không có target, tìm lại
+            FindTargetInRange(normalAttackConfig.attackRange);
+            if (target == null) return;
+        }
 
         Vector3 dir = target.position - transform.position;
         dir.y = 0;
 
         if (dir.sqrMagnitude < 0.01f) return;
 
-        // QUAY TỨC THỜI VỀ HƯỚNG TARGET khi bắt đầu đánh/skill
-        transform.rotation = Quaternion.LookRotation(dir);
+        // Sử dụng cùng logic quay như PlayerMove
+        Quaternion targetRotation = Quaternion.LookRotation(dir);
+
+        if (IsBusy())
+        {
+            // Khi đang đánh/skill: quay tức thời
+            transform.rotation = targetRotation;
+        }
+        else
+        {
+            // Khi không busy: quay mượt
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation,
+                targetRotation,
+                rotateSmooth * Time.deltaTime
+            );
+        }
+
+        Debug.Log($"PlayerOther rotated to target: {target.position}, " +
+                 $"Direction: {dir.normalized}, " +
+                 $"Angle: {transform.rotation.eulerAngles.y}");
     }
 
     private void AutoResetNormalAttack()
@@ -174,10 +198,15 @@ public class PlayerOther : MonoBehaviour
         DetectAnimatorStuck();
         transform.position = Vector3.Lerp(transform.position, targetPos, moveSmooth * Time.deltaTime);
 
-        // Chỉ smooth rotation theo server khi không busy
-        if (!IsBusy())
+        // Chỉ smooth rotation khi không busy và KHÔNG CÓ MỤC TIÊU TRONG TẦM
+        if (!IsBusy() && !HasTargetInRange())
         {
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSmooth * Time.deltaTime);
+        }
+        else if (HasTargetInRange())
+        {
+            // Tự động quay về mục tiêu nếu trong tầm (giống PlayerMove)
+            RotateToTarget();
         }
 
         // Check movement speed giống PlayerMove
@@ -196,24 +225,40 @@ public class PlayerOther : MonoBehaviour
         }
     }
 
+    // THÊM HÀM KIỂM TRA MỤC TIÊU TRONG TẦM (giống PlayerMove)
+    private bool HasTargetInRange()
+    {
+        Collider[] hits = Physics.OverlapSphere(transform.position,
+                                               normalAttackConfig.attackRange,
+                                               enemyLayer);
+        return hits.Length > 0;
+    }
+
     private void FindTargetInRange(float range)
     {
-        if (TranDauControl.Instance == null || TranDauControl.Instance.playerMove == null)
+        // Dùng Physics.OverlapSphere giống PlayerMove
+        Collider[] hits = Physics.OverlapSphere(transform.position, range, enemyLayer);
+
+        target = null;
+        float minDist = Mathf.Infinity;
+
+        foreach (var h in hits)
         {
-            target = null;
-            return;
+            float d = Vector3.Distance(transform.position, h.transform.position);
+            if (d < minDist)
+            {
+                minDist = d;
+                target = h.transform;
+            }
         }
 
-        float distance = Vector3.Distance(transform.position,
-                                         TranDauControl.Instance.playerMove.transform.position);
-
-        if (distance <= range)
+        if (target != null)
         {
-            target = TranDauControl.Instance.playerMove.transform;
+            Debug.Log($"PlayerOther found target: {target.name} at distance: {minDist}");
         }
         else
         {
-            target = null;
+            Debug.Log("PlayerOther: No target found in range");
         }
     }
 
@@ -224,19 +269,20 @@ public class PlayerOther : MonoBehaviour
         else if (skill == 3) currentSkillCfg = skill3;
         else return;
 
-        // Tìm target trong tầm skill
+        // Tìm target trong tầm skill (có thể dùng range lớn hơn cho skill)
         float skillRange = normalAttackConfig.attackRange; // Có thể thay đổi theo từng skill
         FindTargetInRange(skillRange);
 
-        // Xoay về target nếu có - XOAY TỨC THỜI khi bắt đầu skill
+        // Xoay về target nếu có
         if (target != null)
         {
-            RotateToTargetInstant();
+            RotateToTarget();
         }
         else
         {
             // Nếu không có target, quay về hướng server gửi
             transform.rotation = targetRot;
+            Debug.Log($"Skill {skill} - No target in range, using server rotation");
         }
 
         // Set trạng thái skill
@@ -304,6 +350,7 @@ public class PlayerOther : MonoBehaviour
     {
         if (currentSkillCfg == null || currentSkillCfg.prefab == null)
         {
+            Debug.LogWarning("Skill 3 spawn failed: prefab null");
             return;
         }
 
