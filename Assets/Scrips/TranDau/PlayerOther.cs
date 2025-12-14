@@ -46,10 +46,7 @@ public class PlayerOther : MonoBehaviour
     private bool isSkillCasting;
     private bool isHit;
     private Transform target;
-
-    // Thêm gravity giống PlayerMove
     private Vector3 velocity;
-    public float gravity = -20f; // Thêm biến gravity public để có thể điều chỉnh
 
     void Start()
     {
@@ -158,22 +155,11 @@ public class PlayerOther : MonoBehaviour
     public void SetPotion(Vector3 pos)
     {
         transform.position = pos;
-        velocity.y = 0f; // Reset velocity khi set position
     }
 
     private void Update()
     {
-        // Áp dụng gravity giống PlayerMove
-        if (IsBusy())
-        {
-            HandleCombatMovement();
-        }
-        else
-        {
-            HandleNormalMovement();
-        }
-
-        // Smooth movement cho vị trí mục tiêu từ server
+        // Smooth movement
         DetectAnimatorStuck();
         transform.position = Vector3.Lerp(transform.position, targetPos, moveSmooth * Time.deltaTime);
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSmooth * Time.deltaTime);
@@ -192,31 +178,6 @@ public class PlayerOther : MonoBehaviour
         {
             SetAnimatorSpeed(0f); // Dừng di chuyển khi đang trong trạng thái bận
         }
-    }
-
-    // Xử lý di chuyển khi trong combat state (giống PlayerMove)
-    private void HandleCombatMovement()
-    {
-        if (target != null)
-            RotateToTarget();
-
-        // Áp dụng gravity
-        velocity.y += gravity * Time.deltaTime;
-
-        // Di chuyển theo velocity
-        Vector3 gravityMovement = new Vector3(0, velocity.y, 0) * Time.deltaTime;
-        transform.position += gravityMovement;
-    }
-
-    // Xử lý di chuyển bình thường (giống PlayerMove)
-    private void HandleNormalMovement()
-    {
-        // Áp dụng gravity
-        velocity.y += gravity * Time.deltaTime;
-
-        // Di chuyển theo velocity
-        Vector3 gravityMovement = new Vector3(0, velocity.y, 0) * Time.deltaTime;
-        transform.position += gravityMovement;
     }
 
     public void CastSkillFromServer(int skill, bool hasTarget)
@@ -368,9 +329,6 @@ public class PlayerOther : MonoBehaviour
             HealthBar.gameObject.SetActive(true);
         }
         SetHp(hp, hp);
-
-        // Reset velocity khi respawn
-        velocity.y = 0f;
     }
 
     private float stuckTimer = 0f;
