@@ -10,7 +10,7 @@ public class LoginSever : ScaleScreen
     public InputField inputPassWord;
     public Toggle tgNhoMatKhau;
 
-    public override void Start()
+    protected override void Start()
     {
         base.Start();
         btnLogin.onClick.AddListener(ClickLogin);
@@ -125,7 +125,7 @@ public class LoginSever : ScaleScreen
         View(false);
     }
 
-    private void OnEnable()
+    protected override void OnEnable()
     {
         inputUserName.text = AgentUnity.GetString(KeyLocalSave.PP_USERNAME);
         inputPassWord.text = AgentUnity.GetString(KeyLocalSave.PP_PASSWORD);

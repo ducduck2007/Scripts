@@ -19,7 +19,7 @@ public class UiControl: ManualSingleton<UiControl>
         }
         else
         {
-            MainGame.Show(true);
+            MainGame1.Show(true);
         }
     }
 
@@ -43,6 +43,20 @@ public class UiControl: ManualSingleton<UiControl>
             }
 
             return _mainGame;
+        }
+    }
+
+    private MainGame1 _mainGame1;
+    public MainGame1 MainGame1
+    {
+        get
+        {
+            if (_mainGame1 == null)
+            {
+                _mainGame1 = AgentUnity.InstanceObject<MainGame1>(Load(PathResource.MainGame1), transform);
+            }
+
+            return _mainGame1;
         }
     }
 

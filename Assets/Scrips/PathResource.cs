@@ -25,6 +25,9 @@ public class PathResource
     public const string PopupOneButton = "ThongBao/PopupOneButton";
     public const string PopupTwoButton = "ThongBao/PopupTwoButton";
     public const string MainGame = "MainGame/MainGame";
+    public const string MainGame1 = "MainGame/MainGame1";
+    public const string DialogChonPhong = "MainGame/ChonPhong";
+    public const string PopupTimTran = "MainGame/TimTran";
 
     public const string LoadWait = "Load/LoadWait";
     public const string LoadWaitData = "Load/LoadWait";

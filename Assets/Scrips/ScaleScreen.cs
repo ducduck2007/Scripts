@@ -6,21 +6,25 @@ public class ScaleScreen : MonoBehaviour
     public Transform tranScale;
     public Transform contentScale;
     
-    public virtual void Start()
+    protected virtual void OnEnable()
+    {
+        Scale();
+    }
+
+    protected virtual void Start()
+    {
+        // Nếu muốn chỉ scale khi enable thì có thể bỏ Start
+    }
+
+    protected void Scale()
     {
         if (bg != null)
-        {
             AgentUnity.ScaleBg(bg);
-        }
-        
+
         if (tranScale != null)
-        {
             AgentUnity.ScaleTranform(tranScale);
-        }
-        
+
         if (contentScale != null)
-        {
-            AgentUnity.ScaleContent(tranScale);
-        }
+            AgentUnity.ScaleContent(contentScale);
     }
 }

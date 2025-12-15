@@ -18,7 +18,7 @@ public class Register : ScaleScreen
     private TouchScreenKeyboard _keyboard;
 
     // Use this for initialization
-    public override void Start()
+    protected override void Start()
     {
         base.Start();
         btnRegister.onClick.AddListener(ClickRegister);
@@ -31,7 +31,7 @@ public class Register : ScaleScreen
         tgEyeRePassword.onValueChanged.AddListener(arg0 => SetEyeRePassword());
     }
 
-    private void OnEnable()
+    protected override void OnEnable()
     {
         //objEmai.gameObject.SetActive(B.Instance.onEmail == 1);
         Invoke("DelayRegister", 1f);

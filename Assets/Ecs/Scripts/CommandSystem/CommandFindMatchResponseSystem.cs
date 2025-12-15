@@ -21,7 +21,7 @@ public class CommandFindMatchResponseSystem : BaseCommandSystem
             string status = msg.GetString("status");
             int queueSize = msg.GetInt("queueSize");
 
-            UiControl.Instance.MainGame.TimTran();
+            PopupController.Instance.PopupTimTran.TimTran();
         }
         catch (Exception e)
         {

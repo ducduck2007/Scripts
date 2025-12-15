@@ -30,7 +30,7 @@ public class CommandLoginSystem : BaseCommandSystem
                 int losses = msg.GetInt("losses");
                 AgentUnity.SetString(KeyLocalSave.PP_USERNAME, B.Instance.UserName);
                 AgentUnity.SetString(KeyLocalSave.PP_PASSWORD, B.Instance.PassWord);
-                UiControl.Instance.MainGame.Show(true);
+                UiControl.Instance.MainGame1.Show(true);
                 B.Instance.InGame = true;
                 UiControl.Instance.DestroyLoginController();
             }

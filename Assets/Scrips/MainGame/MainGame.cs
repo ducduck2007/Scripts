@@ -12,7 +12,7 @@ public class MainGame : ScaleScreen
     private float timeWaiting;
     private bool isFindingMatch;
 
-    public override void Start()
+    protected override void Start()
     {
         base.Start();
         btnChienDau.onClick.AddListener(ClickChienDau);

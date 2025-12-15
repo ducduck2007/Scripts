@@ -7,22 +7,22 @@ public class DialogController : ManualSingleton<DialogController>
         return Resources.Load(namePath) as GameObject;
     }
 
-    // private DialogMMSetting _dialogMMSetting;
-    // public DialogMMSetting DialogMMSetting
-    // {
-    //     get
-    //     {
-    //         if (_dialogMMSetting == null)
-    //         {
-    //             _dialogMMSetting = AgentUnity.InstanceObject<DialogMMSetting>(Load(PathResource.MM_Setting), transform);
-    //         }
+    private DialogChonPhong _dialogChonPhong;
+    public DialogChonPhong DialogChonPhong
+    {
+        get
+        {
+            if (_dialogChonPhong == null)
+            {
+                _dialogChonPhong = AgentUnity.InstanceObject<DialogChonPhong>(Load(PathResource.DialogChonPhong), transform);
+            }
 
-    //         return _dialogMMSetting;
-    //     }
-    // }
+            return _dialogChonPhong;
+        }
+    }
 
-    // public void ShowDialogMmSetting()
-    // {
-    //     DialogMMSetting.OpenDialog();
-    // }
+    public void ShowDialogChonPhong()
+    {
+        DialogChonPhong.Show();
+    }
 }

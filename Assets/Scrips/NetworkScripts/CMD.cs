@@ -15,17 +15,6 @@
     public const string GAME_ID = "03";
     public const int LOGIN_GAME = 0; // Login game
 
-    // Matchmaking
-    public const int FIND_MATCH = 40;
-    public const int MATCH_FOUND = 41;
-    public const int SELECT_HERO = 42;
-    public const int HERO_SELECTED = 43;
-    public const int GAME_START = 44;
-    public const int GAME_END = 45;
-    public const int CANCEL_FIND_MATCH = 46;
-
-    // Game
-    public const int GAME_SNAPSHOT = 50;
     public const int PLAYERS_IN_ZONE = 11;
     public const int PLAYER_JOINED = 12;
     public const int PLAYER_LEFT = 13;
@@ -39,4 +28,15 @@
     public const int ATTACK = 30;
     public const int DAMAGE_DEALT = 31;
     public const int DEATH = 32;
+    // Matchmaking
+    public const int FIND_MATCH = 40;
+    public const int MATCH_FOUND = 41;
+    public const int SELECT_HERO = 42;
+    public const int HERO_SELECTED = 43;
+    public const int GAME_START = 44;
+    public const int GAME_END = 45;
+    public const int CANCEL_FIND_MATCH = 46;
+
+    // Game
+    public const int GAME_SNAPSHOT = 50;
 }
