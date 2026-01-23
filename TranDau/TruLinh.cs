@@ -2,6 +2,10 @@ using UnityEngine;
 
 public class TruLinh : MonoBehaviour
 {
+    [Header("HP (from RESOURCE_SNAPSHOT)")]
+    public int hp;
+    public int maxHp;
+
     public int idTru;
     public float attackRange = 800f;
     public float fireRate = 1f;
@@ -172,6 +176,19 @@ public class TruLinh : MonoBehaviour
                     mat.color = lerpedColor;
                 }
             }
+        }
+    }
+
+    public void UpdateHpFromServer(int newHp, int newMaxHp)
+    {
+        if (newMaxHp <= 0) return;
+
+        hp = newHp;
+        maxHp = newMaxHp;
+
+        if (hp <= 0)
+        {
+            OnDeath();
         }
     }
 

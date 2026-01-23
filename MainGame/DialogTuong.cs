@@ -33,28 +33,32 @@ public class DialogTuong : ScaleScreen
 
     public void SetData(List<CommandGetDanhSachLoaiTuongSystem.LoaiTuongDto> list)
     {
-        // Debug.Log($"DialogTuong.SetData: list={(list == null ? 0 : list.Count)} content={(content ? content.name : "NULL")} prefab={(itemPrefab ? itemPrefab.name : "NULL")}");
         ClearItems();
 
         int count = (list == null) ? 0 : list.Count;
-
         if (txtSl != null) txtSl.text = $"{count}/100";
+
+        if (content == null)
+        {
+            Debug.LogError("DialogTuong: content is NULL (chưa gán Content của ScrollView).");
+            return;
+        }
+
+        if (itemPrefab == null)
+        {
+            Debug.LogError("DialogTuong: itemPrefab is NULL (chưa gán prefab ItemTuong).");
+            return;
+        }
 
         if (list == null) return;
 
         foreach (var t in list)
         {
             var item = Instantiate(itemPrefab, content);
-            // Debug.Log("Spawn item: " + t.ten);
-
-            item.idTuong = t.id;
-            if (item.txtName != null) item.txtName.text = t.ten;
-
+            item.Init(t.id, t.ten);
             spawned.Add(item);
         }
 
-        // đếm số item đã spawn thật sự (phòng trường hợp prefab null bị bỏ qua), thì đặt txtSl sau vòng foreach
-        // if (txtSl != null) txtSl.text = $"{spawned.Count}/100";
     }
 
     private void ClearItems()
@@ -69,7 +73,7 @@ public class DialogTuong : ScaleScreen
     protected override void OnEnable()
     {
         base.OnEnable();
-        SendData.OnGetDanhSachLoaiTuong(); // ✅ yêu cầu server trả danh sách
+        SendData.OnGetDanhSachLoaiTuong();
     }
 
 }

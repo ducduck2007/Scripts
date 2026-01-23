@@ -13,12 +13,25 @@ public class LoginSever : ScaleScreen
     public RectTransform rootLogin; // gán = Login (RectTransform)
 
     private Vector2 originPos;
-    private bool keyboardOpened;
+    private Vector2 targetPos;
+
+    // ===== Keyboard handling (fix jump + disable in Editor) =====
+    [Header("Keyboard Push Settings")]
+    [SerializeField] private float pushUpScreenRatio = 1f / 6f; // tương đương Screen.height/6f
+    [SerializeField] private float pushLerpSpeed = 12f;         // tốc độ lerp mượt
+    [SerializeField] private int stableFramesRequired = 3;      // debounce để tránh nhấp nháy
+
+    private int visibleStableFrames;
+    private int hiddenStableFrames;
 
     protected override void OnEnable()
     {
         base.OnEnable(); // ScaleScreen → Scale()
         originPos = rootLogin.anchoredPosition;
+        targetPos = originPos;
+
+        visibleStableFrames = 0;
+        hiddenStableFrames = 0;
 
         if (AgentUnity.GetInt(KeyLocalSave.PP_SavePassword) == 0)
         {
@@ -37,27 +50,51 @@ public class LoginSever : ScaleScreen
     void Update()
     {
 #if UNITY_ANDROID || UNITY_IOS
+        // ✅ Không xử lý khi đang chạy trong Editor/giả lập (dù build target Android/iOS)
+        if (!Application.isMobilePlatform)
+            return;
+
         if (!TouchScreenKeyboard.isSupported)
             return;
-            
-        if (TouchScreenKeyboard.visible)
-        {
-            if (!keyboardOpened)
-            {
-                keyboardOpened = true;
 
-                rootLogin.anchoredPosition =
-                    originPos + Vector2.up * (Screen.height / 6f);
+        // ✅ Chỉ xử lý khi đang focus vào 1 trong 2 ô username/password
+        bool anyFocused = (inputUserName != null && inputUserName.isFocused)
+                       || (inputPassWord != null && inputPassWord.isFocused);
+
+        // ✅ Dùng area.height ổn định hơn visible (visible hay nhấp nháy lúc mở)
+        float kbHeight = TouchScreenKeyboard.area.height;
+        bool keyboardShown = anyFocused && kbHeight > 0.01f;
+
+        if (keyboardShown)
+        {
+            visibleStableFrames++;
+            hiddenStableFrames = 0;
+
+            // Debounce: chỉ đẩy lên khi trạng thái "shown" ổn định vài frame
+            if (visibleStableFrames >= stableFramesRequired)
+            {
+                float offset = Screen.height * pushUpScreenRatio;
+                targetPos = originPos + Vector2.up * offset;
             }
         }
         else
         {
-            if (keyboardOpened)
+            hiddenStableFrames++;
+            visibleStableFrames = 0;
+
+            // Debounce: chỉ kéo xuống khi trạng thái "hidden" ổn định vài frame
+            if (hiddenStableFrames >= stableFramesRequired)
             {
-                keyboardOpened = false;
-                rootLogin.anchoredPosition = originPos;
+                targetPos = originPos;
             }
         }
+
+        // ✅ Di chuyển mượt để tránh nhảy giật
+        rootLogin.anchoredPosition = Vector2.Lerp(
+            rootLogin.anchoredPosition,
+            targetPos,
+            Time.unscaledDeltaTime * pushLerpSpeed
+        );
 #endif
     }
 
@@ -66,6 +103,7 @@ public class LoginSever : ScaleScreen
         base.Start();
         btnLogin.onClick.AddListener(ClickLogin);
         btnRegister.onClick.AddListener(ClickRegister);
+
         tgLuuTaiKhoan.onValueChanged.AddListener((arg0 =>
         {
             AudioManager.Instance.AudioClick();
@@ -78,6 +116,7 @@ public class LoginSever : ScaleScreen
                 AgentUnity.SetInt(KeyLocalSave.PP_SavePassword, 1);
             }
         }));
+
         inputUserName.onSubmit.AddListener(_ =>
         {
             inputPassWord.ActivateInputField();
@@ -89,27 +128,31 @@ public class LoginSever : ScaleScreen
         AudioManager.Instance.AudioClick();
         B.Instance.UserName = inputUserName.text;
         B.Instance.PassWord = inputPassWord.text;
+
         string username = inputUserName.text.Trim();
         string password = inputPassWord.text.Trim();
 
         if (username.Length < C.LENGTH_MIN_USERNAME || !AgentCSharp.CheckUsernameValidate(username))
         {
-            SetThongBao(
-                "Tài khoản phải từ " + C.LENGTH_MIN_USERNAME + " ký tự và không chứa ký tự đặc biệt.");
+            SetThongBao("Tài khoản phải từ " + C.LENGTH_MIN_USERNAME + " ký tự và không chứa ký tự đặc biệt.");
             return;
         }
 
         if (password.Length < C.LENGTH_MIN_PASWORD || !AgentCSharp.CheckPasswordValidate(password))
         {
-            SetThongBao(
-                "Mật khẩu phải từ " + C.LENGTH_MIN_PASWORD + " ký tự và chứa chữ cái và số.");
+            SetThongBao("Mật khẩu phải từ " + C.LENGTH_MIN_PASWORD + " ký tự và chứa chữ cái và số.");
             return;
         }
+
         if (!AgentUnity.CheckNetWork())
         {
-            ThongBaoController.Instance.PopupOneButton.ShowPopupOneButton("Thông Báo", "Mạng đang bị lỗi, bạn vui lòng kiểm tra lại kết nối Wifi hoặc 3G/4G.");
+            ThongBaoController.Instance.PopupOneButton.ShowPopupOneButton(
+                "Thông Báo",
+                "Mạng đang bị lỗi, bạn vui lòng kiểm tra lại kết nối Wifi hoặc 3G/4G."
+            );
             return;
         }
+
         StartCoroutine(ProcessLogin(username, password));
     }
 
@@ -117,6 +160,7 @@ public class LoginSever : ScaleScreen
     {
         int cmd = CMDApi.API;
         ApiSend re = new ApiSend(cmd);
+
         try
         {
             // re.Put("version", Res.VERSION);
@@ -142,8 +186,10 @@ public class LoginSever : ScaleScreen
             ShowLoadWait(false);
         }
 
-        UnityEngine.Networking.UnityWebRequest www = AgentUnity.GetHttpPost(CMDApi.LINK_GATEWAY_LOGIN, re.GetJson());
-        //        www.timeout = 10;
+        UnityEngine.Networking.UnityWebRequest www =
+            AgentUnity.GetHttpPost(CMDApi.LINK_GATEWAY_LOGIN, re.GetJson());
+
+        // www.timeout = 10;
         yield return www.SendWebRequest();
 
         try
@@ -164,6 +210,7 @@ public class LoginSever : ScaleScreen
             {
                 ShowLoadWait(false);
                 JObjectCustom j = JObjectCustom.From(www.downloadHandler.text);
+
                 if (j.GetInt("status") == 1)
                 {
                     // bool updateVersion = j.GetBool("updateVersion");
@@ -178,6 +225,7 @@ public class LoginSever : ScaleScreen
                     // }
 
                     B.Instance.Keyhash = j.GetString("keyhash");
+
                     AgentUnity.SetString(KeyLocalSave.PP_USERNAME, userName);
                     AgentUnity.SetString(KeyLocalSave.PP_PASSWORD, passWord);
 
@@ -186,7 +234,9 @@ public class LoginSever : ScaleScreen
                     SendData.OnLoginGame();
                 }
                 else
+                {
                     SetThongBao(j.GetString(Key.MESSAGE));
+                }
             }
         }
         catch (Exception e)

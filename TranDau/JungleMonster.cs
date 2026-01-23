@@ -258,17 +258,20 @@ public class JungleMonster : MonoBehaviour
 
         if (!isInitialized)
         {
-            // Nếu đây là lần đầu nhận data và chưa active
             SetMonsterActive(true);
             isInitialized = true;
         }
 
-        // Luôn cập nhật dữ liệu từ server dù có visible hay không
-        maxHP = hpMax;
-        currentHP = hp;
+        // ✅ CMD50: hpMax = 0 => chỉ update vị trí
         targetPos = new Vector3(x, transform.position.y, y);
 
-        // Cập nhật UI
+        if (hpMax <= 0)
+            return;
+
+        // ✅ CMD51: có hp/hpMax hợp lệ
+        maxHP = hpMax;
+        currentHP = hp;
+
         if (txtMau != null)
             txtMau.text = AgentCSharp.ShowMoneyFull(hp);
 

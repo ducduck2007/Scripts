@@ -26,7 +26,7 @@ public class DialogController : ManualSingleton<DialogController>
         DialogChonPhong.Show();
     }
 
-    
+
     private PopupTimTran _dialogTimTran;
     public PopupTimTran PopupTimTran
     {
@@ -46,7 +46,7 @@ public class DialogController : ManualSingleton<DialogController>
         PopupTimTran.Show();
     }
 
-    
+
     private PopupBanBe _popupBanBe;
     public PopupBanBe DialogBanBe
     {
@@ -66,7 +66,7 @@ public class DialogController : ManualSingleton<DialogController>
         DialogBanBe.Show();
     }
 
-    
+
     private DialogHomThu _dialogHomThu;
     public DialogHomThu DialogHomThu
     {
@@ -86,7 +86,7 @@ public class DialogController : ManualSingleton<DialogController>
         DialogHomThu.Show();
     }
 
-    
+
     private DialogTuong _dialogTuong;
     public DialogTuong DialogTuong
     {
@@ -104,5 +104,19 @@ public class DialogController : ManualSingleton<DialogController>
     public void ShowDialogTuong()
     {
         DialogTuong.Show();
+    }
+
+    private DialogChiTietTuong _dialogChiTietTuong;
+    public DialogChiTietTuong DialogChiTietTuong
+    {
+        get
+        {
+            if (_dialogChiTietTuong == null)
+            {
+                _dialogChiTietTuong = AgentUnity.InstanceObject<DialogChiTietTuong>(Load(PathResource.DialogChiTietTuong), transform);
+            }
+
+            return _dialogChiTietTuong;
+        }
     }
 }

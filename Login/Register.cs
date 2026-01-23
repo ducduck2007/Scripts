@@ -20,7 +20,16 @@ public class Register : ScaleScreen
     public RectTransform rootLogin; // gán = Login (RectTransform)
 
     private Vector2 originPos;
-    private bool keyboardOpened;
+    private Vector2 targetPos;
+
+    // ===== Keyboard handling (fix jump + disable in Editor) =====
+    [Header("Keyboard Push Settings")]
+    [SerializeField] private float pushUpScreenRatio = 1f / 4f; // trước đây bạn dùng Screen.height/4f
+    [SerializeField] private float pushLerpSpeed = 12f;         // tốc độ lerp mượt
+    [SerializeField] private int stableFramesRequired = 3;      // debounce để tránh nhấp nháy
+
+    private int visibleStableFrames;
+    private int hiddenStableFrames;
 
     // Use this for initialization
     protected override void Start()
@@ -46,6 +55,11 @@ public class Register : ScaleScreen
     {
         base.OnEnable();
         originPos = rootLogin.anchoredPosition;
+        targetPos = originPos;
+
+        visibleStableFrames = 0;
+        hiddenStableFrames = 0;
+
         Invoke("DelayRegister", 1f);
         tgEyePassword.isOn = true;
         tgEyeRePassword.isOn = true;
@@ -54,24 +68,52 @@ public class Register : ScaleScreen
     void Update()
     {
 #if UNITY_ANDROID || UNITY_IOS
-        if (TouchScreenKeyboard.visible)
-        {
-            if (!keyboardOpened)
-            {
-                keyboardOpened = true;
+        // ✅ Không xử lý khi đang chạy trong Editor/giả lập (dù build target Android/iOS)
+        if (!Application.isMobilePlatform)
+            return;
 
-                rootLogin.anchoredPosition =
-                    originPos + Vector2.up * (Screen.height / 4f);
+        if (!TouchScreenKeyboard.isSupported)
+            return;
+
+        // ✅ Chỉ xử lý khi đang focus vào 1 trong 3 ô của form register
+        bool anyFocused = (ifUsername != null && ifUsername.isFocused)
+                       || (ifPassword != null && ifPassword.isFocused)
+                       || (ifRePassword != null && ifRePassword.isFocused);
+
+        // ✅ area.height ổn định hơn visible (visible hay nhấp nháy lúc mở)
+        float kbHeight = TouchScreenKeyboard.area.height;
+        bool keyboardShown = anyFocused && kbHeight > 0.01f;
+
+        if (keyboardShown)
+        {
+            visibleStableFrames++;
+            hiddenStableFrames = 0;
+
+            // Debounce: chỉ đẩy lên khi trạng thái "shown" ổn định vài frame
+            if (visibleStableFrames >= stableFramesRequired)
+            {
+                float offset = Screen.height * pushUpScreenRatio;
+                targetPos = originPos + Vector2.up * offset;
             }
         }
         else
         {
-            if (keyboardOpened)
+            hiddenStableFrames++;
+            visibleStableFrames = 0;
+
+            // Debounce: chỉ kéo xuống khi trạng thái "hidden" ổn định vài frame
+            if (hiddenStableFrames >= stableFramesRequired)
             {
-                keyboardOpened = false;
-                rootLogin.anchoredPosition = originPos;
+                targetPos = originPos;
             }
         }
+
+        // ✅ Di chuyển mượt để tránh nhảy giật
+        rootLogin.anchoredPosition = Vector2.Lerp(
+            rootLogin.anchoredPosition,
+            targetPos,
+            Time.unscaledDeltaTime * pushLerpSpeed
+        );
 #endif
     }
 
@@ -114,7 +156,7 @@ public class Register : ScaleScreen
 
     private bool CheckNextLineCondition()
     {
-        return _keyboard.status == TouchScreenKeyboard.Status.Done;
+        return _keyboard != null && _keyboard.status == TouchScreenKeyboard.Status.Done;
     }
 
     private IEnumerator ActiveInputField(FieldName field)
@@ -128,18 +170,13 @@ public class Register : ScaleScreen
                     "Nhập mật khẩu");
                 ifPassword.contentType = TMP_InputField.ContentType.Password;
                 break;
+
             case FieldName.REPASSWORD:
                 ifRePassword.ActivateInputField();
                 _keyboard = TouchScreenKeyboard.Open("", TouchScreenKeyboardType.Default, false, false, true, false,
                     "Nhập lại mật khẩu");
                 ifRePassword.contentType = TMP_InputField.ContentType.Password;
                 break;
-            // case FieldName.GMAIL:
-            //     ifGmail.ActivateInputField();
-            //     _keyboard = TouchScreenKeyboard.Open("", TouchScreenKeyboardType.Default, false, false, false,
-            //         false,
-            //         "Nhập gmail");
-            //     break;
         }
     }
 
@@ -156,7 +193,7 @@ public class Register : ScaleScreen
         ifUsername.text = string.Empty;
         ifPassword.text = string.Empty;
         ifRePassword.text = string.Empty;
-        // ifGmail.text = t;
+
         LoginController.Instance.ServerLogin.View(true);
         Show(false);
     }
@@ -167,14 +204,13 @@ public class Register : ScaleScreen
         string username = ifUsername.text.Trim();
         string password = ifPassword.text.Trim();
         string rePassword = ifRePassword.text.Trim();
-        
+
         if (username.Length < C.LENGTH_MIN_USERNAME || !AgentCSharp.CheckUsernameValidate(username))
         {
-            SetThongBao(
-                "Tài khoản phải từ " + C.LENGTH_MIN_USERNAME + " ký tự và không chứa ký tự đặc biệt.");
+            SetThongBao("Tài khoản phải từ " + C.LENGTH_MIN_USERNAME + " ký tự và không chứa ký tự đặc biệt.");
             return;
         }
-        
+
         if (password != rePassword)
         {
             SetThongBao("Hai mật khẩu không khớp nhau.");
@@ -183,8 +219,7 @@ public class Register : ScaleScreen
 
         if (password.Length < C.LENGTH_MIN_PASWORD || !AgentCSharp.CheckPasswordValidate(password))
         {
-            SetThongBao(
-                "Mật khẩu phải từ " + C.LENGTH_MIN_PASWORD + " ký tự và chứa chữ cái và số.");
+            SetThongBao("Mật khẩu phải từ " + C.LENGTH_MIN_PASWORD + " ký tự và chứa chữ cái và số.");
             return;
         }
 
@@ -192,28 +227,16 @@ public class Register : ScaleScreen
         StartCoroutine(ProcessRegister(username, password, rePassword));
     }
 
-    private IEnumerator ProcessRegister(string userName, string passWord,
-        string rePassword)
+    private IEnumerator ProcessRegister(string userName, string passWord, string rePassword)
     {
         ApiSend re = new ApiSend(CMDApi.API);
         re.Put("username", userName);
         re.Put("password", passWord);
-//         re.Put("platform", CMD.TYPE_FLATFORM);
-//         re.Put("provider", CMD.PROVIDER_ID);
-//         re.Put("imei", AgentUnity.GetImeiDevice());
-//         // re.Put("imei", "1769efb46c10fb4c8a3198106d5c8fde5e01c408");
-//         re.Put("ip", AgentUnity.GetLocalIPAddress());
-//         re.Put("macAddress",AgentUnity.GetMacAddress());
-//         re.Put("uuid",AgentUnity.GetUUID());
-//         re.Put("deviceType", SystemInfo.deviceType.ToString());
-//         re.Put("deviceName", SystemInfo.deviceName);
-//         re.Put("deviceModel", SystemInfo.deviceModel);
-//         re.Put("operatingSystemFamily", SystemInfo.operatingSystemFamily.ToString());
-//         re.Put("operatingSystem", SystemInfo.operatingSystem);
-// //        re.Put("language", AgentUnity.GetInt(KeyLocalSave.PP_ID_LANGUAGE));
-//         re.Put("tokenFirebase", AgentUnity.GetString(KeyLocalSave.PP_TOKEN_FIREBASE));
-        UnityEngine.Networking.UnityWebRequest www = AgentUnity.GetHttpPost(CMDApi.LINK_GATEWAY_REGISTER, re.GetJson());
-//        www.timeout = 10;
+
+        UnityEngine.Networking.UnityWebRequest www =
+            AgentUnity.GetHttpPost(CMDApi.LINK_GATEWAY_REGISTER, re.GetJson());
+
+        // www.timeout = 10;
         yield return www.SendWebRequest();
 
         if (www.isNetworkError)
@@ -237,6 +260,7 @@ public class Register : ScaleScreen
             {
                 AgentUnity.SetString(KeyLocalSave.PP_USERNAME, userName);
                 AgentUnity.SetString(KeyLocalSave.PP_PASSWORD, passWord);
+
                 // SuperDialog.Instance.Toast.MakeToast(j.GetString(Key.MESSAGE), 0.8f);
                 ClickLogin();
             }
@@ -248,7 +272,6 @@ public class Register : ScaleScreen
             ShowLoadWait(false);
         }
     }
-
 
     private void SetThongBao(string msg)
     {

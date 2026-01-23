@@ -5,15 +5,36 @@ public class PlayerOther : MonoBehaviour
 {
     public Animator animator;
 
-    public int teamId = 0; // Mặc định là 0
+    public int teamId = 0;
 
     private Vector3 targetPos;
     private Quaternion targetRot;
-    private bool isAlive = true; // Thêm khởi tạo mặc định
+    private bool isAlive = true;
 
-    public float moveSmooth = 15f;
-    public float rotateSmooth = 12f;
-    public float movingThreshold = 0.01f;
+    // ==================== NETWORK / PREDICTION ====================
+    private Vector3 lastServerPos;
+    private Vector3 serverVelocity;
+    private float lastUpdateTime;
+
+    // Extrapolate lâu hơn để tránh đứng hình khi mất snapshot
+    private const float EXTRAPOLATION_LIMIT = 1.2f;
+
+    // Clamp dự đoán tránh bay quá xa
+    private const float MAX_EXTRA_DISTANCE = 150f;
+
+    // Nếu gap quá lớn, bật chế độ "đuổi kịp nhanh" thay vì teleport cứng
+    private float catchupTimer = 0f;
+    private const float CATCHUP_DURATION = 0.25f;
+    private const float CATCHUP_MULT = 6f;
+
+    // ✅ FIX DỨT ĐIỂM: nếu lệch quá lớn hoặc lâu không update => snap thẳng
+    private const float HARD_SNAP_DISTANCE = 80f;   // chỉnh theo game/map
+    private const float HARD_SNAP_TIME_GAP = 0.35f; // giây
+
+    // SMOOTHING PARAMETERS
+    public float moveSmooth = 20f;
+    public float rotateSmooth = 15f;
+    public float movingThreshold = 5f;
 
     public LayerMask enemyLayer;
 
@@ -22,7 +43,6 @@ public class PlayerOther : MonoBehaviour
 
     public Transform parentSkill;
 
-    // ====================== SKILL CONFIG ==========================
     [System.Serializable]
     public class SkillConfig
     {
@@ -32,11 +52,10 @@ public class PlayerOther : MonoBehaviour
         public float delaySpawn = 0.3f;
         public float damageDelay = 0.5f;
         public float projectileSpeed = 10f;
-        
-        // Thêm các checkbox để phân biệt vị trí spawn
-        public bool spawnAtSelf = false;        // Sinh ở vị trí nhân vật mình
-        public bool spawnAtTarget = false;      // Sinh ở vị trí mục tiêu trong tầm đánh
-        public bool moveToTarget = false;       // Prefab sinh ở nhân vật mình rồi di chuyển qua mục tiêu
+
+        public bool spawnAtSelf = false;
+        public bool spawnAtTarget = false;
+        public bool moveToTarget = false;
     }
 
     public SkillConfig skill1 = new SkillConfig();
@@ -44,7 +63,6 @@ public class PlayerOther : MonoBehaviour
     public SkillConfig skill3 = new SkillConfig();
 
     private SkillConfig currentSkillCfg;
-    // ===============================================================
 
     public float hpMax;
     public float hpCurrent;
@@ -63,35 +81,37 @@ public class PlayerOther : MonoBehaviour
         public int damage = 1;
         public float duration = 1.2f;
         public float damageDelay = 0.3f;
-        public float spawnDelay = 0.2f; // Delay sinh prefab
+        public float spawnDelay = 0.2f;
         public string animationBool = "isAttack";
-        
-        // Thêm các checkbox cho đánh thường
-        public bool spawnAtSelf = false;        // Sinh ở vị trí nhân vật mình
-        public bool spawnAtTarget = false;      // Sinh ở vị trí mục tiêu trong tầm đánh
-        public bool moveToTarget = false;       // Prefab sinh ở nhân vật mình rồi di chuyển qua mục tiêu
+
+        public bool spawnAtSelf = false;
+        public bool spawnAtTarget = false;
+        public bool moveToTarget = false;
     }
 
     public NormalAttackConfig normalAttackConfig = new NormalAttackConfig();
 
     void Start()
     {
-        if (HealthBar != null)
+        if (ShouldUseHealthBar())
         {
-            if (teamId == B.Instance.teamId)
-            {
-                HealthBar.SetThanhMau(1);
-            }
-            else
-            {
-                HealthBar.SetThanhMau(2);
-            }
+            SafeSetHealthBarActive(true);
+            SafeSetThanhMau(teamId == B.Instance.teamId ? 1 : 2);
         }
-        
-        // Khởi tạo trạng thái sống
+        else
+        {
+            SafeSetHealthBarActive(false);
+        }
+
         isAlive = true;
+
+        lastServerPos = transform.position;
+        targetPos = transform.position;
+        targetRot = transform.rotation;
+        serverVelocity = Vector3.zero;
+        lastUpdateTime = Time.time;
     }
-    
+
     public void SetTeamId(int teamId)
     {
         this.teamId = teamId;
@@ -101,66 +121,164 @@ public class PlayerOther : MonoBehaviour
     {
         hpMax = maxHp;
         hpCurrent = hp;
-        if (HealthBar != null)
+
+        if (!ShouldUseHealthBar()) return;
+        if (HealthBar == null) return;
+
+        try
         {
+            float ratio = (hpMax <= 0f) ? 0f : Mathf.Clamp01(hpCurrent / hpMax);
             if (hpCurrent < hpMax)
-            {
-                HealthBar.SetProgress((float)(hpCurrent / hpMax), 30);
-            }
+                HealthBar.SetProgress(ratio, 30);
             else
-            {
                 HealthBar.SetProgress(1f, 100);
-            }
         }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[PlayerOther] HealthBar SetProgress error: {e.Message}");
+        }
+    }
+
+    // ==================== NETWORK RESET ====================
+    public void ResetNetworkState(Vector3 spawnPos, float heading, int newTeamId)
+    {
+        teamId = newTeamId;
+
+        isAlive = true;
+
+        isNormalAttacking = false;
+        isSkillCasting = false;
+        isHit = false;
+        serverIsAttack = false;
+
+        transform.position = spawnPos;
+        targetPos = spawnPos;
+        lastServerPos = spawnPos;
+        serverVelocity = Vector3.zero;
+
+        targetRot = Quaternion.Euler(0, heading, 0);
+        transform.rotation = targetRot;
+
+        lastUpdateTime = Time.time;
+        catchupTimer = CATCHUP_DURATION;
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", 0f);
+            animator.SetBool("isAttack", false);
+            animator.SetBool("isSkill1", false);
+            animator.SetBool("isSkill2", false);
+            animator.SetBool("isSkill3", false);
+            animator.SetBool("isDeath", false);
+            animator.SetBool("isHit", false);
+        }
+
+        SafeSetHealthBarActive(ShouldUseHealthBar());
+        if (ShouldUseHealthBar())
+            SafeSetThanhMau(teamId == B.Instance.teamId ? 1 : 2);
+
+        ForceEnableRenderers();
+    }
+
+    private void ReviveVisuals()
+    {
+        isAlive = true;
+
+        if (animator != null && animator.isInitialized)
+        {
+            animator.SetBool("isDeath", false);
+            animator.SetBool("isHit", false);
+            animator.SetBool("isAttack", false);
+            animator.SetBool("isSkill1", false);
+            animator.SetBool("isSkill2", false);
+            animator.SetBool("isSkill3", false);
+            animator.SetFloat("Speed", 0f);
+        }
+
+        SafeSetHealthBarActive(ShouldUseHealthBar());
+        if (ShouldUseHealthBar())
+            SafeSetThanhMau(teamId == B.Instance.teamId ? 1 : 2);
+
+        ForceEnableRenderers();
+
+        stuckTimer = 0f;
+        lastStateName = "";
+    }
+
+    private void ForceEnableRenderers()
+    {
+        var renderers = GetComponentsInChildren<Renderer>(true);
+        foreach (var r in renderers) r.enabled = true;
+
+        var sprites = GetComponentsInChildren<SpriteRenderer>(true);
+        foreach (var s in sprites) s.enabled = true;
     }
 
     public void ApplyServerData(PlayerOutPutSv data)
     {
-        targetPos = new Vector3(data.x/2, transform.position.y, data.y/2);
-        targetRot = Quaternion.Euler(0, data.heading, 0);
-        isAlive = data.isAlive;
-        SetHp(data.hp, data.maxHp);
+        // ===== 1) ALIVE TRANSITIONS =====
+        if (!data.isAlive)
+        {
+            if (isAlive) onDeath();
+            return; // chết thì khỏi movement
+        }
+        else
+        {
+            if (!isAlive)
+                ReviveVisuals();
+        }
 
-        // THÊM SET TEAM ID TỪ SERVER NẾU CÓ
-        // if (data.teamId != 0) SetTeamId(data.teamId);
+        // ===== 2) MOVEMENT SNAPSHOT =====
+        Vector3 newServerPos = new Vector3(data.x, transform.position.y, data.y);
+
+        float dt = Time.time - lastUpdateTime;
+
+        // Nếu gap snapshot lớn => bật catch-up để giảm teleport cảm giác
+        if (dt > 0.7f)
+            catchupTimer = CATCHUP_DURATION;
+
+        if (dt > 0.001f)
+        {
+            serverVelocity = (newServerPos - lastServerPos) / dt;
+
+            float maxSpeed = 500f;
+            if (serverVelocity.magnitude > maxSpeed)
+                serverVelocity = serverVelocity.normalized * maxSpeed;
+        }
+
+        targetPos = newServerPos;
+        lastServerPos = newServerPos;
+
+        targetRot = Quaternion.Euler(0, data.heading, 0);
+
+        // ✅ CMD50 sẽ đưa hp/maxHp = 0 => bỏ qua
+        if (data != null && data.maxHp > 0)
+        {
+            SetHp(data.hp, data.maxHp);
+        }
+
+        lastUpdateTime = Time.time;
     }
 
     public void SetAttackState(bool isAttack, bool hasTarget)
     {
-        // Kiểm tra nếu nhân vật đã chết thì không thực hiện tấn công
         if (!isAlive) return;
-        
         if (!isAttack) return;
 
-        // Tìm target trong tầm đánh
         FindTargetInRange(normalAttackConfig.attackRange);
 
-        // Xoay về target nếu có
-        if (target != null)
-        {
-            RotateToTargetInstant(); // Xoay tức thời khi bắt đầu đánh
-        }
-        else
-        {
-            // Nếu không có target trong tầm, vẫn quay về hướng server gửi
-            transform.rotation = targetRot;
-        }
+        if (target != null) RotateToTargetInstant();
+        else transform.rotation = targetRot;
 
-        // Set trạng thái tấn công
         isNormalAttacking = true;
         serverIsAttack = true;
 
-        // Bật animation đánh thường
         animator.SetBool("isAttack", true);
 
-        // Sinh prefab cho đánh thường
         Invoke(nameof(SpawnNormalAttackPrefab), normalAttackConfig.spawnDelay);
-
-        // Auto reset sau duration
         Invoke(nameof(AutoResetNormalAttack), normalAttackConfig.duration);
     }
 
-    // Xoay tức thời khi bắt đầu đánh/skill
     private void RotateToTargetInstant()
     {
         if (target == null) return;
@@ -170,7 +288,6 @@ public class PlayerOther : MonoBehaviour
 
         if (dir.sqrMagnitude < 0.01f) return;
 
-        // QUAY TỨC THỜI VỀ HƯỚNG TARGET khi bắt đầu đánh/skill
         transform.rotation = Quaternion.LookRotation(dir);
     }
 
@@ -192,59 +309,121 @@ public class PlayerOther : MonoBehaviour
     public void SetPotion(Vector3 pos)
     {
         transform.position = pos;
+        targetPos = pos;
+        lastServerPos = pos;
+        serverVelocity = Vector3.zero;
+        lastUpdateTime = Time.time;
+        catchupTimer = CATCHUP_DURATION;
     }
 
     void Update()
     {
-        // Kiểm tra nếu nhân vật đã chết thì không thực hiện bất kỳ hành động nào
         if (!isAlive)
         {
             SetAnimatorSpeed(0f);
             return;
         }
-        
-        // Smooth movement
-        DetectAnimatorStuck();
-        transform.position = Vector3.Lerp(transform.position, targetPos, moveSmooth * Time.deltaTime);
 
-        // Chỉ smooth rotation theo server khi không busy
+        DetectAnimatorStuck();
+
+        UpdateMovementWithExtrapolation();
+
         if (!IsBusy())
         {
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotateSmooth * Time.deltaTime);
         }
 
-        // Check movement speed
+        UpdateAnimation();
+    }
+
+    private void UpdateMovementWithExtrapolation()
+    {
+        Vector3 currentPos = transform.position;
+
+        float timeSinceLastUpdate = Time.time - lastUpdateTime;
+
+        Vector3 extrapolatedTarget = targetPos;
+
+        // dự đoán theo velocity (có clamp)
+        if (serverVelocity.sqrMagnitude > 0.1f)
+        {
+            float t = Mathf.Min(timeSinceLastUpdate, EXTRAPOLATION_LIMIT);
+            Vector3 predicted = targetPos + serverVelocity * t;
+
+            Vector3 delta = predicted - targetPos;
+            delta.y = 0;
+            if (delta.magnitude > MAX_EXTRA_DISTANCE)
+                predicted = targetPos + delta.normalized * MAX_EXTRA_DISTANCE;
+
+            extrapolatedTarget = predicted;
+        }
+
+        Vector3 toTarget = extrapolatedTarget - currentPos;
+        toTarget.y = 0;
+        float distance = toTarget.magnitude;
+
+        if (distance < movingThreshold) return;
+
+        // ✅ FIX DỨT ĐIỂM: snap nếu lệch lớn hoặc lâu không nhận update
+        if (distance >= HARD_SNAP_DISTANCE || timeSinceLastUpdate >= HARD_SNAP_TIME_GAP)
+        {
+            transform.position = new Vector3(extrapolatedTarget.x, currentPos.y, extrapolatedTarget.z);
+            catchupTimer = CATCHUP_DURATION;
+            return;
+        }
+
+        float smooth = moveSmooth;
+        if (catchupTimer > 0f)
+        {
+            smooth *= CATCHUP_MULT;
+            catchupTimer -= Time.deltaTime;
+        }
+
+        transform.position = Vector3.Lerp(currentPos, extrapolatedTarget, smooth * Time.deltaTime);
+    }
+
+    private void UpdateAnimation()
+    {
         Vector3 moveVector = (targetPos - transform.position);
         moveVector.y = 0;
-        float speedValue = moveVector.magnitude > 0.05f ? 1f : 0f;
 
-        // Chỉ set speed khi không busy
+        float speedValue = 0f;
+
         if (!IsBusy())
         {
+            if (moveVector.magnitude > movingThreshold || serverVelocity.sqrMagnitude > 0.1f)
+                speedValue = 1f;
+            else
+                speedValue = 0f;
+
             SetAnimatorSpeed(speedValue);
         }
         else
         {
-            SetAnimatorSpeed(0f); // Dừng di chuyển khi đang trong trạng thái bận
+            SetAnimatorSpeed(0f);
         }
     }
 
-    // SỬA LẠI HÀM FindTargetInRange ĐỂ TÌM ĐÚNG MỤC TIÊU
     private void FindTargetInRange(float range)
     {
-        // Tìm tất cả PlayerMove và PlayerOther trong scene
+        // ✅ ưu tiên dùng cache để giảm hitch (nguyên nhân hay gây “trễ vài giây”)
+        if (TranDauControl.Instance != null)
+        {
+            target = TranDauControl.Instance.FindNearestEnemy(transform.position, range, teamId);
+            if (target != null) return;
+        }
+
+        // fallback giữ y như cũ
         PlayerMove[] allPlayerMoves = FindObjectsOfType<PlayerMove>();
         PlayerOther[] allPlayerOthers = FindObjectsOfType<PlayerOther>();
 
         target = null;
         float minDist = Mathf.Infinity;
 
-        // Kiểm tra PlayerMove trước
         foreach (var playerMove in allPlayerMoves)
         {
-            // Nếu teamId đã được set, kiểm tra team khác nhau
             if (teamId != 0 && B.Instance.teamId == teamId)
-                continue; // Bỏ qua đồng đội
+                continue;
 
             float distance = Vector3.Distance(transform.position, playerMove.transform.position);
             if (distance <= range && distance < minDist)
@@ -254,15 +433,12 @@ public class PlayerOther : MonoBehaviour
             }
         }
 
-        // Kiểm tra PlayerOther
         foreach (var playerOther in allPlayerOthers)
         {
-            // Bỏ qua chính mình
             if (playerOther == this) continue;
 
-            // Kiểm tra team khác nhau nếu có teamId
             if (teamId != 0 && playerOther.teamId == teamId)
-                continue; // Bỏ qua đồng đội
+                continue;
 
             float distance = Vector3.Distance(transform.position, playerOther.transform.position);
             if (distance <= range && distance < minDist)
@@ -272,14 +448,12 @@ public class PlayerOther : MonoBehaviour
             }
         }
 
-        // Fallback: nếu không tìm thấy, thử dùng Physics.OverlapSphere
         if (target == null)
         {
             Collider[] hits = Physics.OverlapSphere(transform.position, range, enemyLayer);
 
             foreach (var hit in hits)
             {
-                // Bỏ qua chính mình
                 if (hit.transform == this.transform) continue;
 
                 float distance = Vector3.Distance(transform.position, hit.transform.position);
@@ -292,71 +466,46 @@ public class PlayerOther : MonoBehaviour
         }
     }
 
-    // HÀM LẤY TEAM ID TỪ PlayerMove (nếu có)
-
     public void CastSkillFromServer(int skill, bool hasTarget)
     {
-        // Kiểm tra nếu nhân vật đã chết thì không thực hiện skill
         if (!isAlive) return;
-        
+
         if (skill == 1) currentSkillCfg = skill1;
         else if (skill == 2) currentSkillCfg = skill2;
         else if (skill == 3) currentSkillCfg = skill3;
         else return;
 
-        // Tìm target trong tầm skill
         float skillRange = normalAttackConfig.attackRange;
         FindTargetInRange(skillRange);
 
-        // Xoay về target nếu có - XOAY TỨC THỜI khi bắt đầu skill
-        if (target != null)
-        {
-            RotateToTargetInstant();
-        }
-        else
-        {
-            // Nếu không có target, quay về hướng server gửi
-            transform.rotation = targetRot;
-        }
+        if (target != null) RotateToTargetInstant();
+        else transform.rotation = targetRot;
 
-        // Set trạng thái skill
         isSkillCasting = true;
 
-        // Bật animation skill nếu có
         if (!string.IsNullOrEmpty(currentSkillCfg.animationBool))
         {
-            // Tắt trạng thái di chuyển
             SetAnimatorSpeed(0f);
 
-            // Set bool cho skill tương ứng
             switch (skill)
             {
-                case 1:
-                    animator.SetBool("isSkill1", true);
-                    break;
-                case 2:
-                    animator.SetBool("isSkill2", true);
-                    break;
-                case 3:
-                    animator.SetBool("isSkill3", true);
-                    break;
+                case 1: animator.SetBool("isSkill1", true); break;
+                case 2: animator.SetBool("isSkill2", true); break;
+                case 3: animator.SetBool("isSkill3", true); break;
             }
 
             Invoke(nameof(EndSkillAnimationWrapper), currentSkillCfg.animationDuration);
         }
 
-        // Spawn skill với damage delay
         Invoke(nameof(SpawnSkillWithDamageDelay), currentSkillCfg.delaySpawn);
     }
 
     private void EndSkillAnimationWrapper()
     {
-        // Reset trạng thái skill
         isSkillCasting = false;
 
         if (currentSkillCfg != null && !string.IsNullOrEmpty(currentSkillCfg.animationBool))
         {
-            // Reset tất cả bool skill
             animator.SetBool("isAttack", false);
             animator.SetBool("isSkill1", false);
             animator.SetBool("isSkill2", false);
@@ -371,42 +520,22 @@ public class PlayerOther : MonoBehaviour
         Vector3 spawnPos;
         Quaternion spawnRot;
 
-        // Kiểm tra các checkbox để xác định vị trí spawn
         if (normalAttackConfig.spawnAtSelf)
         {
-            // Sinh ở vị trí nhân vật mình
             spawnPos = transform.position;
             spawnRot = transform.rotation;
-            
+
             GameObject attackObj = Instantiate(normalAttackConfig.prefab, spawnPos, spawnRot);
-            
-            // Nếu cần di chuyển đến mục tiêu
+
             if (normalAttackConfig.moveToTarget && target != null)
             {
                 PlayerOtherSkillMovement skillMovement = attackObj.AddComponent<PlayerOtherSkillMovement>();
                 skillMovement.targetPosition = target.position;
-                skillMovement.moveSpeed = 1200f; // Tốc độ cho đánh thường
+                skillMovement.moveSpeed = 1200f;
             }
         }
         else if (normalAttackConfig.spawnAtTarget)
         {
-            // Sinh ở vị trí mục tiêu
-            if (target != null)
-            {
-                spawnPos = target.position;
-                spawnRot = Quaternion.LookRotation(target.position - transform.position);
-            }
-            else
-            {
-                spawnPos = transform.position + transform.forward * normalAttackConfig.attackRange;
-                spawnRot = transform.rotation;
-            }
-            
-            Instantiate(normalAttackConfig.prefab, spawnPos, spawnRot);
-        }
-        else
-        {
-            // Mặc định: spawn ở vị trí mục tiêu (giữ nguyên logic cũ)
             if (target != null)
             {
                 spawnPos = target.position;
@@ -420,8 +549,21 @@ public class PlayerOther : MonoBehaviour
 
             Instantiate(normalAttackConfig.prefab, spawnPos, spawnRot);
         }
-        
-        Debug.Log("Normal attack prefab spawned at: " + spawnPos);
+        else
+        {
+            if (target != null)
+            {
+                spawnPos = target.position;
+                spawnRot = Quaternion.LookRotation(target.position - transform.position);
+            }
+            else
+            {
+                spawnPos = transform.position + transform.forward * normalAttackConfig.attackRange;
+                spawnRot = transform.rotation;
+            }
+
+            Instantiate(normalAttackConfig.prefab, spawnPos, spawnRot);
+        }
     }
 
     private void SpawnSkillWithDamageDelay()
@@ -431,34 +573,24 @@ public class PlayerOther : MonoBehaviour
         Vector3 spawnPos;
         Quaternion spawnRot;
 
-        // Kiểm tra các checkbox để xác định vị trí spawn
         if (currentSkillCfg.spawnAtSelf)
         {
-            // Sinh ở vị trí nhân vật mình
             spawnPos = transform.position;
             spawnRot = transform.rotation;
-            
+
             GameObject skillObj = Instantiate(currentSkillCfg.prefab, spawnPos, spawnRot);
-            
-            // Nếu cần di chuyển đến mục tiêu
+
             if (currentSkillCfg.moveToTarget)
             {
                 PlayerOtherSkillMovement skillMovement = skillObj.AddComponent<PlayerOtherSkillMovement>();
-                if (target != null)
-                {
-                    skillMovement.targetPosition = target.position;
-                }
-                else
-                {
-                    skillMovement.targetPosition = transform.position +
-                        transform.forward * normalAttackConfig.attackRange;
-                }
+                skillMovement.targetPosition = target != null
+                    ? target.position
+                    : transform.position + transform.forward * normalAttackConfig.attackRange;
                 skillMovement.moveSpeed = currentSkillCfg.projectileSpeed;
             }
         }
         else if (currentSkillCfg.spawnAtTarget)
         {
-            // Sinh ở vị trí mục tiêu
             if (target != null)
             {
                 spawnPos = target.position;
@@ -469,13 +601,12 @@ public class PlayerOther : MonoBehaviour
                 spawnPos = transform.position + transform.forward * normalAttackConfig.attackRange;
                 spawnRot = transform.rotation;
             }
-            
+
             Instantiate(currentSkillCfg.prefab, spawnPos, spawnRot);
         }
         else
         {
-            // Mặc định: giữ nguyên logic cũ cho skill1
-            if (currentSkillCfg == skill1) // Skill 1 đặc biệt
+            if (currentSkillCfg == skill1)
             {
                 spawnPos = transform.position;
                 spawnRot = transform.rotation;
@@ -483,18 +614,12 @@ public class PlayerOther : MonoBehaviour
                 GameObject skillObj = Instantiate(currentSkillCfg.prefab, spawnPos, spawnRot);
 
                 PlayerOtherSkillMovement skillMovement = skillObj.AddComponent<PlayerOtherSkillMovement>();
-                if (target != null)
-                {
-                    skillMovement.targetPosition = target.position;
-                }
-                else
-                {
-                    skillMovement.targetPosition = transform.position +
-                        transform.forward * normalAttackConfig.attackRange;
-                }
+                skillMovement.targetPosition = target != null
+                    ? target.position
+                    : transform.position + transform.forward * normalAttackConfig.attackRange;
                 skillMovement.moveSpeed = currentSkillCfg.projectileSpeed;
             }
-            else // Skill 2, 3 và normal attack
+            else
             {
                 if (target != null)
                 {
@@ -510,11 +635,8 @@ public class PlayerOther : MonoBehaviour
                 Instantiate(currentSkillCfg.prefab, spawnPos, spawnRot);
             }
         }
-
-        Debug.Log("Skill spawned at: " + spawnPos);
     }
 
-    // Class hỗ trợ di chuyển cho skill (dành riêng cho PlayerOther)
     private class PlayerOtherSkillMovement : MonoBehaviour
     {
         public Vector3 targetPosition;
@@ -523,84 +645,64 @@ public class PlayerOther : MonoBehaviour
         void Update()
         {
             transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-
-            // Hủy khi đến đích
             if (Vector3.Distance(transform.position, targetPosition) < 0.1f)
-            {
                 Destroy(gameObject);
-            }
         }
     }
 
-    // Hàm Set Animator Speed
     private void SetAnimatorSpeed(float speed)
     {
-        animator.SetFloat("Speed", speed);
+        if (animator != null)
+            animator.SetFloat("Speed", speed);
     }
 
-    // Hàm kiểm tra trạng thái bận
     private bool IsBusy() => isNormalAttacking || isSkillCasting || isHit;
 
     public void onDeath()
     {
-        // Đánh dấu nhân vật đã chết
         isAlive = false;
-        
-        // Reset tất cả trạng thái
+
         SetAnimatorSpeed(0f);
         animator.SetBool("isAttack", false);
         animator.SetBool("isSkill1", false);
         animator.SetBool("isSkill2", false);
         animator.SetBool("isSkill3", false);
         animator.SetBool("isDeath", true);
-        
-        // Hủy bỏ tất cả các Invoke đang chạy
+
         CancelInvoke(nameof(AutoResetNormalAttack));
         CancelInvoke(nameof(SpawnNormalAttackPrefab));
         CancelInvoke(nameof(EndSkillAnimationWrapper));
         CancelInvoke(nameof(SpawnSkillWithDamageDelay));
-        
-        // Reset các trạng thái tấn công
+
         isNormalAttacking = false;
         isSkillCasting = false;
         isHit = false;
         serverIsAttack = false;
 
-        if (HealthBar != null)
-        {
-            HealthBar.gameObject.SetActive(false);
-        }
+        SafeSetHealthBarActive(false);
     }
 
     public void onRespawn(float x, float y, int hp)
     {
-        // Đánh dấu nhân vật sống lại
-        isAlive = true;
-        
-        animator.SetBool("isDeath", false);
-        SetPotion(new Vector3(x, 0, y));
-        if (HealthBar != null)
-        {
-            HealthBar.gameObject.SetActive(true);
-        }
+        Vector3 respawnPos = new Vector3(x, 0, y);
+        float heading = transform.eulerAngles.y;
+
+        ResetNetworkState(respawnPos, heading, teamId);
         SetHp(hp, hp);
     }
 
+    // ==================== ANIMATOR STUCK DETECTOR (GIỮ NGUYÊN) ====================
     private float stuckTimer = 0f;
     private string lastStateName = "";
 
     void DetectAnimatorStuck()
     {
-        // Kiểm tra nếu nhân vật đã chết thì không kiểm tra stuck
         if (!isAlive) return;
-        
-        // Kiểm tra nếu animator không hợp lệ
         if (animator == null || !animator.isInitialized) return;
 
         AnimatorStateInfo info = animator.GetCurrentAnimatorStateInfo(0);
         string stateName = GetCurrentStateName(info);
 
-        // Nếu đổi trạng thái → reset timer
         if (stateName != lastStateName)
         {
             lastStateName = stateName;
@@ -610,11 +712,9 @@ public class PlayerOther : MonoBehaviour
 
         stuckTimer += Time.deltaTime;
 
-        // Nếu đang idle hoặc walking → không bao giờ reset
         if (stateName == "Idle" || stateName == "Walking")
             return;
 
-        // Nếu animation chiến đấu chạy >5s → coi như bị kẹt
         if (stuckTimer > 5f)
         {
             ForceResetAnimator();
@@ -623,7 +723,6 @@ public class PlayerOther : MonoBehaviour
 
     string GetCurrentStateName(AnimatorStateInfo info)
     {
-        // Sử dụng hash thay vì tên trực tiếp để tránh lỗi
         if (info.IsName("Idle")) return "Idle";
         if (info.IsName("Walking")) return "Walking";
         if (info.IsName("Attack")) return "Attack";
@@ -638,7 +737,6 @@ public class PlayerOther : MonoBehaviour
 
     void ForceResetAnimator()
     {
-        // Reset tất cả trạng thái
         SetAnimatorSpeed(0f);
         animator.SetBool("isAttack", false);
         animator.SetBool("isSkill1", false);
@@ -647,7 +745,6 @@ public class PlayerOther : MonoBehaviour
         animator.SetBool("isDeath", false);
         animator.SetBool("isHit", false);
 
-        // Reset các biến trạng thái
         isNormalAttacking = false;
         isSkillCasting = false;
         isHit = false;
@@ -659,7 +756,52 @@ public class PlayerOther : MonoBehaviour
     void OnDrawGizmosSelected()
     {
         if (transform == null) return;
+
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, normalAttackConfig.attackRange);
+
+        Gizmos.color = Color.green;
+        Gizmos.DrawLine(transform.position, targetPos);
+        Gizmos.DrawSphere(targetPos, 10f);
+
+        Gizmos.color = Color.blue;
+        if (serverVelocity.sqrMagnitude > 0.01f)
+            Gizmos.DrawRay(transform.position, serverVelocity.normalized * 50f);
+    }
+
+    private bool ShouldUseHealthBar()
+    {
+        // ✅ FIX: trả về bool đúng
+        return TranDauControl.Instance != null;
+    }
+
+    private void SafeSetThanhMau(int type)
+    {
+        if (!ShouldUseHealthBar()) return;
+        if (HealthBar == null) return;
+
+        try
+        {
+            HealthBar.SetThanhMau(type);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[PlayerOther] HealthBar SetThanhMau error: {e.Message}");
+        }
+    }
+
+    private void SafeSetHealthBarActive(bool active)
+    {
+        if (!ShouldUseHealthBar()) active = false;
+        if (HealthBar == null) return;
+
+        try
+        {
+            HealthBar.gameObject.SetActive(active);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[PlayerOther] HealthBar SetActive error: {e.Message}");
+        }
     }
 }

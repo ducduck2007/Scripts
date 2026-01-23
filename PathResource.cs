@@ -45,5 +45,6 @@ public class PathResource
     public const string DialogChat = "Chat/Chat";
     public const string DialogHomThu = "HomThu/DialogHomThu";
     public const string DialogTuong = "Tuong/DialogTuong";
+    public const string DialogChiTietTuong = "Tuong/DialogChiTietTuong";
 
 }
