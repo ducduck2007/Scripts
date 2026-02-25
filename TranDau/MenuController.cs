@@ -166,9 +166,6 @@ public class MenuController : ScaleScreen
         var t2 = EnsureHoldTracker(skill2.btnCast); if (t2 != null) t2.skillIndex = 2;
         var t3 = EnsureHoldTracker(skill3.btnCast); if (t3 != null) t3.skillIndex = 3;
 
-        EnsureHoldAimPreview(skill1.btnCast, 1);
-        EnsureHoldAimPreview(skill2.btnCast, 2);
-        EnsureHoldAimPreview(skill3.btnCast, 3);
 
         if (skill1.btnPlusLevel != null) skill1.btnPlusLevel.onClick.AddListener(() => OnClickPlus(1));
         if (skill2.btnPlusLevel != null) skill2.btnPlusLevel.onClick.AddListener(() => OnClickPlus(2));
@@ -493,72 +490,63 @@ public class MenuController : ScaleScreen
         StartCooldown(skillId, timeCdSeconds);
     }
 
+    // Helper gọi tracker báo cast
+    private void NotifyCastFired(Button btnCast)
+    {
+        if (btnCast == null) return;
+        var go = (btnCast.targetGraphic != null) ? btnCast.targetGraphic.gameObject : btnCast.gameObject;
+        var tr = go.GetComponent<SkillButtonHoldTracker>();
+        tr?.OnCastFired();
+    }
+
     public void TungChieu1()
     {
-        if (!HasAtLeastOneLevel(1))
-        {
-            RefreshSkillCastLockOverlay(1);
-            return;
-        }
-
-        var pm = TranDauControl.Instance != null ? TranDauControl.Instance.playerMove : null;
+        if (!HasAtLeastOneLevel(1)) { RefreshSkillCastLockOverlay(1); return; }
+        var pm = TranDauControl.Instance?.playerMove;
         if (pm == null) return;
 
         int autoFlag = GetAutoFlagFromBtn(skill1.btnCast);
-        if (!pm.TryCastSkill(1, autoFlag))
-            return;
+        NotifyCastFired(skill1.btnCast);          // ★ báo tracker
+
+        if (!pm.TryCastSkill(1, autoFlag)) return;
 
         AudioManager.Instance.PlayHeroSound(GetHeroKey(), AudioManager.HeroSoundType.Skill);
         AudioManager.Instance.PlaySkillSound(GetHeroKey());
-
         SendData.SendAttack(0, 3, transform.position, 1);
-
         StartCooldown(1, fallbackCooldownTime);
     }
 
     public void TungChieu2()
     {
-        if (!HasAtLeastOneLevel(2))
-        {
-            RefreshSkillCastLockOverlay(2);
-            return;
-        }
-
-        var pm = TranDauControl.Instance != null ? TranDauControl.Instance.playerMove : null;
+        if (!HasAtLeastOneLevel(2)) { RefreshSkillCastLockOverlay(2); return; }
+        var pm = TranDauControl.Instance?.playerMove;
         if (pm == null) return;
 
         int autoFlag = GetAutoFlagFromBtn(skill2.btnCast);
-        if (!pm.TryCastSkill(2, autoFlag))
-            return;
+        NotifyCastFired(skill2.btnCast);          // ★
+
+        if (!pm.TryCastSkill(2, autoFlag)) return;
 
         AudioManager.Instance.PlayHeroSound(GetHeroKey(), AudioManager.HeroSoundType.Skill);
         AudioManager.Instance.PlaySkillSound(GetHeroKey());
-
         SendData.SendAttack(0, 3, transform.position, 2);
-
         StartCooldown(2, fallbackCooldownTime);
     }
 
     public void TungChieu3()
     {
-        if (!HasAtLeastOneLevel(3))
-        {
-            RefreshSkillCastLockOverlay(3);
-            return;
-        }
-
-        var pm = TranDauControl.Instance != null ? TranDauControl.Instance.playerMove : null;
+        if (!HasAtLeastOneLevel(3)) { RefreshSkillCastLockOverlay(3); return; }
+        var pm = TranDauControl.Instance?.playerMove;
         if (pm == null) return;
 
         int autoFlag = GetAutoFlagFromBtn(skill3.btnCast);
-        if (!pm.TryCastSkill(3, autoFlag))
-            return;
+        NotifyCastFired(skill3.btnCast);          // ★
+
+        if (!pm.TryCastSkill(3, autoFlag)) return;
 
         AudioManager.Instance.PlayHeroSound(GetHeroKey(), AudioManager.HeroSoundType.Skill);
         AudioManager.Instance.PlaySkillSound(GetHeroKey());
-
         SendData.SendAttack(0, 3, transform.position, 3);
-
         StartCooldown(3, fallbackCooldownTime);
     }
 
@@ -1017,18 +1005,5 @@ public class MenuController : ScaleScreen
         if (pm == null) return;
 
         pm.DisableAllAimCanvases();
-    }
-
-    private void EnsureHoldAimPreview(Button btn, int skillIndex)
-    {
-        if (btn == null) return;
-
-        GameObject go = (btn.targetGraphic != null) ? btn.targetGraphic.gameObject : btn.gameObject;
-
-        var p = go.GetComponent<SkillAimHoldPreview>();
-        if (p == null) p = go.AddComponent<SkillAimHoldPreview>();
-
-        p.skillIndex = skillIndex;
-        p.delay = 0.5f;
     }
 }

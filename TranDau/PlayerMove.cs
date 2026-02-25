@@ -719,6 +719,8 @@ public class PlayerMove : MonoBehaviour
             }
         }
 
+        DisableAllAimCanvases();
+
         if (controller != null)
             SendData.SendCastSkill(skill, dirX, dirY, targetX, targetY, controller.transform.position, autoFlag);
 
