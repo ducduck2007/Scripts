@@ -33,6 +33,7 @@ public class HeroShowcase2D : MonoBehaviour
             _co = null;
         }
 
+        // Reset pose của hero trước đó về default
         if (_target != null && _profile != null)
             ApplyPose(_target, _profile.defaultPose);
 
@@ -51,14 +52,17 @@ public class HeroShowcase2D : MonoBehaviour
     {
         if (_target == null || _profile == null) yield break;
 
+        // --- Enter delay ---
         if (_profile.enterDelay > 0f)
             yield return new WaitForSecondsRealtime(_profile.enterDelay);
 
         var prev = _profile.defaultPose;
 
-        if (_profile.steps != null)
+        if (_profile.steps != null && _profile.steps.Length > 0)
         {
-            float startT = Time.unscaledTime;
+            // Dùng elapsed tích lũy thay vì snapshot Time.unscaledTime
+            // để tránh sai lệch trên thiết bị yếu / frame drop
+            float elapsed = 0f;
 
             for (int i = 0; i < _profile.steps.Length; i++)
             {
@@ -66,15 +70,25 @@ public class HeroShowcase2D : MonoBehaviour
 
                 var s = _profile.steps[i];
 
-                float wait = s.atTime - (Time.unscaledTime - startT);
-                if (wait > 0f)
-                    yield return new WaitForSecondsRealtime(wait);
+                // Chờ đến đúng atTime tính từ lúc bắt đầu chuỗi steps
+                float waitTime = s.atTime - elapsed;
+                if (waitTime > 0f)
+                {
+                    elapsed += waitTime;
+                    yield return new WaitForSecondsRealtime(waitTime);
+                }
 
+                // Lerp đến pose mục tiêu, thời gian lerp tính riêng
                 yield return LerpPose(prev, s.pose, Mathf.Max(0f, s.lerpTime));
+
+                // Cộng thêm lerpTime vào elapsed sau khi lerp xong
+                elapsed += Mathf.Max(0f, s.lerpTime);
+
                 prev = s.pose;
             }
 
-            float waitToReturn = _profile.returnAtTime - (Time.unscaledTime - startT);
+            // Chờ rồi lerp về default pose
+            float waitToReturn = _profile.returnAtTime - elapsed;
             if (waitToReturn > 0f)
                 yield return new WaitForSecondsRealtime(waitToReturn);
 
@@ -115,6 +129,11 @@ public class HeroShowcase2D : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Lerp pose từ a → b trong khoảng thời gian duration.
+    /// Dùng Time.unscaledDeltaTime thay vì snapshot Time.unscaledTime
+    /// để animation chạy đúng tốc độ trên mọi thiết bị, kể cả thiết bị yếu.
+    /// </summary>
     IEnumerator LerpPose(HeroShowcaseProfile.Pose a, HeroShowcaseProfile.Pose b, float duration)
     {
         if (_target == null) yield break;
@@ -125,16 +144,16 @@ public class HeroShowcase2D : MonoBehaviour
             yield break;
         }
 
-        float t0 = Time.unscaledTime;
+        float elapsed = 0f;
 
-        while (true)
+        while (elapsed < duration)
         {
             if (_target == null) yield break;
 
-            float t = (Time.unscaledTime - t0) / duration;
-            if (t >= 1f) break;
+            // Tích lũy delta mỗi frame, không phụ thuộc vào thời điểm bắt đầu
+            elapsed += Time.unscaledDeltaTime;
 
-            float k = Smooth(t);
+            float k = Smooth(Mathf.Clamp01(elapsed / duration));
 
             _target.localPosition = Vector3.LerpUnclamped(a.localPosition, b.localPosition, k);
             _target.localRotation = Quaternion.Euler(Vector3.LerpUnclamped(a.localEuler, b.localEuler, k));
@@ -145,6 +164,7 @@ public class HeroShowcase2D : MonoBehaviour
             yield return null;
         }
 
+        // Snap chính xác về pose đích sau khi vòng lặp kết thúc
         ApplyPose(_target, b);
     }
 
@@ -165,6 +185,7 @@ public class HeroShowcase2D : MonoBehaviour
         catch { }
     }
 
+    /// <summary>Smoothstep: easing in-out mượt</summary>
     static float Smooth(float x)
     {
         x = Mathf.Clamp01(x);
