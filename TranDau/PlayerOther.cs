@@ -4,6 +4,7 @@ using System.Collections;
 
 public class PlayerOther : MonoBehaviour
 {
+    private int _currentSkillIndex = 0;
     public Animator animator;
     public int teamId = 0;
 
@@ -622,6 +623,8 @@ public class PlayerOther : MonoBehaviour
         else if (skill == 3) currentSkillCfg = skill3;
         else return;
 
+        _currentSkillIndex = skill;
+
         if (hasPendingServerAim && serverDirCached.sqrMagnitude > 0.0001f)
         {
             Vector3 look = serverDirCached;
@@ -708,8 +711,16 @@ public class PlayerOther : MonoBehaviour
             return;
         }
 
-        if (currentSkillCfg.skillObject == null)
+        if (currentSkillCfg.skillObject == null) return;
+
+        // ★ FIX: Canvas skill fallback — reset localPosition X/Z = 0
+        if (IsCanvasTypeSkill(GetCurrentSkillType()))
+        {
+            ResetSkillObjectToLocalZero(currentSkillCfg.skillObject);
+            currentSkillCfg.skillObject.transform.rotation = transform.rotation;
+            currentSkillCfg.skillObject.SetActive(true);
             return;
+        }
 
         Vector3 spawnPos;
         Quaternion spawnRot;
@@ -734,12 +745,25 @@ public class PlayerOther : MonoBehaviour
 
     private void ShowSkillByServerAim(SkillConfig cfg, TranDauControl.SkillCastInfo info)
     {
-        if (cfg == null) return;
+        if (cfg == null || cfg.skillObject == null) return;
 
-        if (cfg.skillObject == null)
+        // ★ FIX: Canvas skill (type 2) chỉ rotate, RESET localPosition X/Z = 0
+        if (IsCanvasTypeSkill(info.typeSkill))
+        {
+            ResetSkillObjectToLocalZero(cfg.skillObject);
+
+            Vector3 dir = info.dir;
+            dir.y = 0f;
+            if (dir.sqrMagnitude > 0.0001f)
+                cfg.skillObject.transform.rotation = Quaternion.LookRotation(dir.normalized);
+            else
+                cfg.skillObject.transform.rotation = transform.rotation;
+
+            cfg.skillObject.SetActive(true);
             return;
+        }
 
-        ComputeServerVisual(info, out Vector3 origin, out Vector3 dst, out Vector3 dir, out Quaternion rot, out bool needMove);
+        ComputeServerVisual(info, out Vector3 origin, out Vector3 dst, out Vector3 dir2, out Quaternion rot, out bool needMove);
 
         bool usesTarget = SkillCastProtocol33.UsesTargetPos(info.typeSkill);
         bool usesDir = SkillCastProtocol33.UsesDirection(info.typeSkill);
@@ -1169,5 +1193,27 @@ public class PlayerOther : MonoBehaviour
                 rb.detectCollisions = enabled;
             }
         }
+    }
+
+    // ★ Thêm helper này
+    private bool IsCanvasTypeSkill(int typeSkill) => typeSkill == 2;
+
+    private void ResetSkillObjectToLocalZero(GameObject skillObj)
+    {
+        if (skillObj == null) return;
+        Vector3 lp = skillObj.transform.localPosition;
+        lp.x = 0f;
+        lp.z = 0f;
+        skillObj.transform.localPosition = lp;
+    }
+
+    private int GetCurrentSkillType()
+    {
+        try
+        {
+            if (B.Instance == null || userId == 0) return 0;
+            return B.Instance.GetSkillType(userId, _currentSkillIndex);
+        }
+        catch { return 0; }
     }
 }
