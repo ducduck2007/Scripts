@@ -3,11 +3,11 @@ using UnityEngine.EventSystems;
 
 public class JoystickController : MonoBehaviour, IDragHandler, IPointerDownHandler, IPointerUpHandler
 {
-    public RectTransform bg;       // nền joystick
-    public RectTransform handle;   // nút joystick
+    public RectTransform bg;
+    public RectTransform handle;
     public float joystickRadius = 80f;
 
-    [HideInInspector] 
+    [HideInInspector]
     public Vector2 inputVector;
 
     public void OnPointerDown(PointerEventData eventData)

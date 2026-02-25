@@ -24,17 +24,17 @@ public class Bullet : MonoBehaviour
 
     public void SendDame()
     {
-        if (!target) return;
-        PlayerMove pm = target.GetComponent<PlayerMove>();
-        if (pm != null)
-        {
-            SendData.OnTruBanMinh();
-        }
-        MinionMove minion = target.GetComponent<MinionMove>();
-        if (minion != null && minion.teamId == B.Instance.teamId)
-        {
-            SendData.OnTruBanLinh(minion.teamId, minion.minionId);
-        }
+        // if (!target) return;
+        // PlayerMove pm = target.GetComponent<PlayerMove>();
+        // if (pm != null)
+        // {
+        //     SendData.OnTruBanMinh();
+        // }
+        // MinionMove minion = target.GetComponent<MinionMove>();
+        // if (minion != null && minion.teamId == B.Instance.teamId)
+        // {
+        //     SendData.OnTruBanLinh(minion.teamId, minion.minionId);
+        // }
     }
 
     void Update()

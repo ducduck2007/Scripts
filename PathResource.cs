@@ -39,12 +39,17 @@ public class PathResource
     public const string LoadWaitData = "Load/LoadWait";
     public const string LoadPercent = "Load/LoadPercentChangeInfo";
     public const string LoadVaoTran = "Load/LoadVaoTran";
-    
+
     public const string DialogBanBe = "BanBe/PopupBanBe";
     public const string LoiMoiKetBan = "BanBe/LoiMoiKetBan";
     public const string DialogChat = "Chat/Chat";
     public const string DialogHomThu = "HomThu/DialogHomThu";
     public const string DialogTuong = "Tuong/DialogTuong";
     public const string DialogChiTietTuong = "Tuong/DialogChiTietTuong";
+    public const string DialogSuKien = "Tuong/DialogSuKien";
+    public const string DialogNhiemVu = "Tuong/DialogNhiemVu";
+    public const string DialogTrangBi = "Item/DialogTrangBi";
 
+    public const string LoiMoiVaoParty = "Party/LoiMoiVaoParty";
+    public const string PopupPartyMatchFound = "Party/PopupPartyMatchFound";
 }

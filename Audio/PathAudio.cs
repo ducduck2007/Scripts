@@ -14,4 +14,6 @@ public class PathAudio
 
     public const string NhanThuong = "Audio/Nhan_thuong";
     public const string Background = "Audio/background";
+
+    public const string NormalAttack = "Audio/NormalAttack";
 }

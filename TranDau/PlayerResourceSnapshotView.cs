@@ -14,8 +14,6 @@ public class PlayerResourceSnapshotView : MonoBehaviour
     [Header("Optional UI Bindings")]
     public TMP_Text txtLevel;
     public TMP_Text txtExp;
-    public TMP_Text txtSkills;
-    public TMP_Text txtShield;
 
     [Header("Options")]
     public bool onlyShowForLocalPlayer;
@@ -45,9 +43,11 @@ public class PlayerResourceSnapshotView : MonoBehaviour
 
         int curExp = data.GetCurrentExp();
         if (txtExp != null) txtExp.text = $"{curExp}/{data.expToNextLevel}";
+    }
 
-        if (txtSkills != null) txtSkills.text = $"{data.skill1Level}/{data.skill2Level}/{data.skill3Level}";
-        if (txtShield != null) txtShield.text = data.shield.ToString();
+    private void OnEnable()
+    {
+        ResetView();
     }
 
     private void Start()
@@ -79,5 +79,18 @@ public class PlayerResourceSnapshotView : MonoBehaviour
             _currentManaRatio = Mathf.Lerp(_currentManaRatio, _targetManaRatio, Time.deltaTime * fillSmoothSpeed);
             imgManaFill.fillAmount = _currentManaRatio;
         }
+    }
+
+    public void ResetView()
+    {
+        _targetHpRatio = _currentHpRatio = 1f;
+        _targetManaRatio = _currentManaRatio = 1f;
+
+        if (imgHpFill != null) imgHpFill.fillAmount = 1f;
+        if (imgManaFill != null) imgManaFill.fillAmount = 1f;
+
+        if (txtHpValue != null) txtHpValue.text = "";
+        if (txtLevel != null) txtLevel.text = "1";
+        if (txtExp != null) txtExp.text = "0/0";
     }
 }

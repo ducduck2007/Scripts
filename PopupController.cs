@@ -16,7 +16,6 @@ public class PopupController : ManualSingleton<PopupController>
             {
                 _loiMoiKetBan = AgentUnity.InstanceObject<LoiMoiKetBan>(Load(PathResource.LoiMoiKetBan), transform);
             }
-
             return _loiMoiKetBan;
         }
     }
@@ -25,6 +24,50 @@ public class PopupController : ManualSingleton<PopupController>
     {
         LoiMoiKetBan.Show();
     }
+
+    private LoiMoiVaoParty _loiMoiVaoParty;
+    public LoiMoiVaoParty LoiMoiVaoParty
+    {
+        get
+        {
+            if (_loiMoiVaoParty == null)
+            {
+                _loiMoiVaoParty = AgentUnity.InstanceObject<LoiMoiVaoParty>(
+                    Resources.Load("Popups/LoiMoiVaoParty") as GameObject,
+                    transform
+                );
+            }
+            return _loiMoiVaoParty;
+        }
+    }
+
+    public void ShowLoiMoiVaoParty(int partyId, string inviterName, long inviterId, int memberCount, int maxMembers)
+    {
+        LoiMoiVaoParty.SetInfo(partyId, inviterName, inviterId, memberCount, maxMembers);
+    }
+
+    private PopupPartyMatchFound _partyMatchFound;
+    public PopupPartyMatchFound PartyMatchFound
+    {
+        get
+        {
+            if (_partyMatchFound == null)
+            {
+                _partyMatchFound = AgentUnity.InstanceObject<PopupPartyMatchFound>(
+                    Resources.Load("Popups/PopupPartyMatchFound") as GameObject,
+                    transform
+                );
+            }
+            return _partyMatchFound;
+        }
+    }
+
+    public void ShowPartyMatchFound()
+    {
+        PartyMatchFound.ShowMatchFound();
+    }
+
+    // =========================
 
     private ChonTuong _chonTuong;
     public ChonTuong ChonTuong
@@ -35,7 +78,6 @@ public class PopupController : ManualSingleton<PopupController>
             {
                 _chonTuong = AgentUnity.InstanceObject<ChonTuong>(Load(PathResource.ChonTuong), transform);
             }
-
             return _chonTuong;
         }
     }

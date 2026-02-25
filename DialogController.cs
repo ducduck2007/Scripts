@@ -119,4 +119,61 @@ public class DialogController : ManualSingleton<DialogController>
             return _dialogChiTietTuong;
         }
     }
+
+    public void ShowDialogSuKien()
+    {
+        DialogSuKien.Show();
+    }
+
+    private DialogSuKien _dialogSuKien;
+    public DialogSuKien DialogSuKien
+    {
+        get
+        {
+            if (_dialogSuKien == null)
+            {
+                _dialogSuKien = AgentUnity.InstanceObject<DialogSuKien>(Load(PathResource.DialogSuKien), transform);
+            }
+
+            return _dialogSuKien;
+        }
+    }
+
+    public void ShowDialogNhiemVu()
+    {
+        DialogNhiemVu.Show();
+    }
+
+    private DialogNhiemVu _dialogNhiemVu;
+    public DialogNhiemVu DialogNhiemVu
+    {
+        get
+        {
+            if (_dialogNhiemVu == null)
+            {
+                _dialogNhiemVu = AgentUnity.InstanceObject<DialogNhiemVu>(Load(PathResource.DialogNhiemVu), transform);
+            }
+
+            return _dialogNhiemVu;
+        }
+    }
+
+    public void ShowDialogTrangBi()
+    {
+        DialogTrangBi.Show();
+    }
+
+    private DialogTrangBi _dialogTrangBi;
+    public DialogTrangBi DialogTrangBi
+    {
+        get
+        {
+            if (_dialogTrangBi == null)
+            {
+                _dialogTrangBi = AgentUnity.InstanceObject<DialogTrangBi>(Load(PathResource.DialogTrangBi), transform);
+            }
+
+            return _dialogTrangBi;
+        }
+    }
 }

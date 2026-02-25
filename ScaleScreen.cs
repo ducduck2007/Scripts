@@ -5,7 +5,7 @@ public class ScaleScreen : MonoBehaviour
     public GameObject bg;
     public Transform tranScale;
     public Transform contentScale;
-    
+
     protected virtual void OnEnable()
     {
         Scale();
@@ -13,12 +13,11 @@ public class ScaleScreen : MonoBehaviour
 
     protected virtual void OnDisable()
     {
-        
+
     }
 
     protected virtual void Start()
     {
-        // Nếu muốn chỉ scale khi enable thì có thể bỏ Start
     }
 
     protected void Scale()
@@ -36,5 +35,10 @@ public class ScaleScreen : MonoBehaviour
     public void ClickTinhNangAn()
     {
         ThongBaoController.Instance.Toast.ShowToast("Tính năng đang phát triển");
+    }
+
+    public void ClickDichVuChuaKetNoi()
+    {
+        ThongBaoController.Instance.Toast.ShowToast("Kết nối dịch vụ IAP chỉ hoạt động với phiên bản chính thức trên chợ");
     }
 }

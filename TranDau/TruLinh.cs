@@ -1,56 +1,141 @@
+using DG.Tweening;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class TruLinh : MonoBehaviour
 {
-    [Header("HP (from RESOURCE_SNAPSHOT)")]
-    public int hp;
-    public int maxHp;
-
     public int idTru;
-    public float attackRange = 800f;
+    private float attackRange = 300f - 2f;
     public float fireRate = 1f;
     public GameObject bulletPrefab, prefabNotru;
-    public GameObject phamVi;
     public Transform firePoint;
-    public int damage = 5;
+    private int damage = 5;
 
-    // Biến cho hiệu ứng nhấp nháy
+    public LayerMask playerLayer;
+    private float nextFireTime;
+    private Transform currentTarget;
+
+    public GameObject phamVi;
+
     public float blinkSpeed = 3f;
     public Color activeColor = Color.red;
     public Color warningColor = new Color(1f, 0.3f, 0.3f, 0.7f);
     public bool useAlphaBlink = true;
     public bool useColorBlink = true;
 
-    // Biến cho Line Renderer
+    private Renderer[] phamViRenderers;
+    private float blinkTimer;
+
+    [Header("Line Attack")]
     public LineRenderer attackLine;
-    public float lineWidth = 1f;
+    public float lineWidth = 2f;
     public Color lineStartColor = Color.red;
     public Color lineEndColor = Color.yellow;
+    public float lineStartYOffset = -95f;
+    public float lineEndYOffset = 15f;
 
-    private float nextFireTime;
-    public LayerMask playerLayer;
+    [Header("HP System (from server)")]
+    public int currentHP = -1;
+    public int maxHP = -1;
 
-    private Renderer[] phamViRenderers;
-    private float blinkTimer = 0f;
-    private Transform currentTarget;
+    public TMP_Text txtHP;
+    public Image hpFillImage;
+
+    private bool hasHpFromServer = false;
+
+    [Header("Proximity Effect (Merged)")]
+    public GameObject effectPrefab;
+    public Camera cam;
+    public float checkInterval = 0.5f;
+    public float boundsPadding = 1.5f;
+
+    private GameObject spawnedEffect;
+    private Renderer effectRenderer;
+    private Renderer objectRenderer;
+    private Bounds effectBounds;
+    private Bounds objectBounds;
+    private bool isEffectVisible;
+    private float checkTimer;
+    private bool effectInitialized;
+
+    [Header("HP Tween")]
+    public float hpTweenDuration = 0.25f;
+
+    [Header("Death Tween")]
+    public float deathMoveY = -80f;
+    public float deathRotateZ = 90f;
+    public float deathTweenDuration = 1f;
+    public float deathEffectDelay = 0.5f;
+
+    private Tween hpTween;
+    private bool isDying = false;
+
+    public bool IsMainTurret => idTru == 18 || idTru == 19; // 18: xanh, 19: đỏ
+    public bool IsDying => isDying;
 
     private void Start()
     {
         if (phamVi != null)
         {
-            phamViRenderers = phamVi.GetComponentsInChildren<Renderer>();
-            SetPhamViVisibility(false); // Ẩn ban đầu
+            phamViRenderers = phamVi.GetComponentsInChildren<Renderer>(true);
+            SetPhamViVisibility(false);
+            phamVi.SetActive(false);
         }
 
-        // Khởi tạo Line Renderer
         InitializeLineRenderer();
+        InitializeProximityEffect();
+        UpdateHP(currentHP, maxHP);
+    }
+
+    private void Update()
+    {
+        HandleCombat();
+        UpdateBlinkEffect();
+        UpdateProximityEffect();
+    }
+
+    private void HandleCombat()
+    {
+        Collider[] hits = Physics.OverlapSphere(transform.position, attackRange, playerLayer);
+
+        if (hits.Length > 0)
+        {
+            currentTarget = hits[0].transform;
+
+            if (phamVi != null && !phamVi.activeSelf)
+            {
+                phamVi.SetActive(true);
+                SetPhamViVisibility(true);
+                blinkTimer = 0f;
+            }
+
+            UpdateAttackLine();
+
+            if (Time.time >= nextFireTime)
+            {
+                nextFireTime = Time.time + 1f / fireRate;
+            }
+        }
+        else
+        {
+            currentTarget = null;
+
+            if (attackLine != null)
+                attackLine.enabled = false;
+
+            if (phamVi != null && phamVi.activeSelf)
+            {
+                SetPhamViVisibility(false);
+                phamVi.SetActive(false);
+            }
+        }
     }
 
     private void InitializeLineRenderer()
     {
         if (attackLine == null)
         {
-            // Tạo Line Renderer nếu chưa có
             GameObject lineObj = new GameObject("AttackLine");
             lineObj.transform.SetParent(transform);
             attackLine = lineObj.AddComponent<LineRenderer>();
@@ -59,169 +144,286 @@ public class TruLinh : MonoBehaviour
         attackLine.startWidth = lineWidth;
         attackLine.endWidth = lineWidth;
         attackLine.material = new Material(Shader.Find("Sprites/Default"));
+        attackLine.positionCount = 2;
+        attackLine.enabled = false;
 
-        Gradient gradient = new Gradient();
-        gradient.SetKeys(
-            new GradientColorKey[] {
-                new GradientColorKey(lineStartColor, 0.0f),
-                new GradientColorKey(lineEndColor, 1.0f)
+        Gradient g = new Gradient();
+        g.SetKeys(
+            new[] {
+                new GradientColorKey(lineStartColor, 0f),
+                new GradientColorKey(lineEndColor, 1f)
             },
-            new GradientAlphaKey[] {
-                new GradientAlphaKey(1.0f, 0.0f),
-                new GradientAlphaKey(1.0f, 1.0f)
+            new[] {
+                new GradientAlphaKey(1f, 0f),
+                new GradientAlphaKey(1f, 1f)
             }
         );
-        attackLine.colorGradient = gradient;
-
-        attackLine.enabled = false;
-        attackLine.positionCount = 2;
-    }
-
-    private void Update()
-    {
-        Collider[] hits = Physics.OverlapSphere(transform.position, attackRange, playerLayer);
-
-        if (hits.Length > 0)
-        {
-            currentTarget = hits[0].transform;
-
-            if (!phamVi.activeSelf)
-            {
-                phamVi.SetActive(true);
-                SetPhamViVisibility(true);
-                blinkTimer = 0f;
-            }
-
-            UpdateBlinkEffect();
-            UpdateAttackLine();
-
-            if (Time.time >= nextFireTime)
-            {
-                // Shoot(currentTarget);
-                nextFireTime = Time.time + 1f / fireRate;
-            }
-        }
-        else
-        {
-            currentTarget = null;
-            attackLine.enabled = false;
-
-            if (phamVi.activeSelf)
-            {
-                SetPhamViVisibility(false);
-                phamVi.SetActive(false);
-            }
-        }
+        attackLine.colorGradient = g;
     }
 
     private void UpdateAttackLine()
     {
         if (currentTarget == null || attackLine == null) return;
 
-        // Bật Line Renderer
         attackLine.enabled = true;
 
-        // Đặt điểm bắt đầu (từ firePoint hoặc trung tâm tháp)
-        Vector3 startPoint = firePoint != null ? firePoint.position : transform.position;
+        Vector3 start = firePoint != null ? firePoint.position : transform.position;
+        start.y += lineStartYOffset;
 
-        // Đặt điểm kết thúc vào giữa nhân vật target (cả 2 trục X và Z)
-        Vector3 targetCenter = currentTarget.position;
+        Vector3 end = currentTarget.position;
+        Collider col = currentTarget.GetComponent<Collider>();
+        if (col != null)
+            end = col.bounds.center;
 
-        // Nếu target có Collider, lấy điểm giữa của collider
-        Collider targetCollider = currentTarget.GetComponent<Collider>();
-        if (targetCollider != null)
-        {
-            targetCenter = targetCollider.bounds.center;
-        }
+        end.y += lineEndYOffset;
 
-        // Cập nhật vị trí cho Line Renderer
-        attackLine.SetPosition(0, startPoint);
-        attackLine.SetPosition(1, targetCenter);
+        attackLine.SetPosition(0, start);
+        attackLine.SetPosition(1, end);
     }
 
     private void UpdateBlinkEffect()
     {
-        if (phamViRenderers == null || phamViRenderers.Length == 0) return;
+        if (phamViRenderers == null || !phamVi.activeSelf) return;
 
         blinkTimer += Time.deltaTime * blinkSpeed;
 
-        foreach (Renderer rend in phamViRenderers)
+        foreach (var rend in phamViRenderers)
         {
             if (rend == null) continue;
 
-            Material[] materials = rend.materials;
-            foreach (Material mat in materials)
+            foreach (var mat in rend.materials)
             {
-                if (useAlphaBlink && mat.HasProperty("_Color"))
-                {
-                    Color currentColor = mat.color;
-                    // Tạo hiệu ứng nhấp nháy bằng alpha
-                    float alpha = 0.5f + 0.5f * Mathf.Sin(blinkTimer * Mathf.PI);
-                    currentColor.a = alpha;
-                    mat.color = currentColor;
-                }
+                if (!mat.HasProperty("_Color")) continue;
 
-                if (useColorBlink && mat.HasProperty("_Color"))
-                {
-                    // Tạo hiệu ứng nhấp nháy bằng màu sắc
-                    float lerpValue = 0.5f + 0.5f * Mathf.Sin(blinkTimer * Mathf.PI);
-                    Color lerpedColor = Color.Lerp(warningColor, activeColor, lerpValue);
+                float t = 0.5f + 0.5f * Mathf.Sin(blinkTimer * Mathf.PI);
 
-                    if (!useAlphaBlink)
-                    {
-                        // Giữ alpha nguyên nếu không dùng alpha blink
-                        lerpedColor.a = mat.color.a;
-                    }
+                Color c = useColorBlink
+                    ? Color.Lerp(warningColor, activeColor, t)
+                    : mat.color;
 
-                    mat.color = lerpedColor;
-                }
+                if (useAlphaBlink)
+                    c.a = 0.5f + 0.5f * Mathf.Sin(blinkTimer * Mathf.PI);
+
+                mat.color = c;
             }
         }
     }
 
-    public void UpdateHpFromServer(int newHp, int newMaxHp)
-    {
-        if (newMaxHp <= 0) return;
-
-        hp = newHp;
-        maxHp = newMaxHp;
-
-        if (hp <= 0)
-        {
-            OnDeath();
-        }
-    }
-
-    private void SetPhamViVisibility(bool isVisible)
+    private void SetPhamViVisibility(bool visible)
     {
         if (phamViRenderers == null) return;
-        foreach (Renderer rend in phamViRenderers)
-        {
-            if (rend != null)
-                rend.enabled = isVisible;
-        }
+        foreach (var r in phamViRenderers)
+            if (r != null) r.enabled = visible;
     }
 
-    public void Shoot(Transform target)
+    private void SetHpUIVisible(bool visible)
     {
-        GameObject bullet = Instantiate(bulletPrefab, firePoint.position, firePoint.rotation);
-        bullet.transform.SetParent(null);
-        Bullet bulletScript = bullet.GetComponent<Bullet>();
-        if (bulletScript != null)
-            bulletScript.Setup(target, damage);
+        if (hpFillImage != null) hpFillImage.enabled = visible;
+        if (txtHP != null) txtHP.enabled = visible;
+    }
+
+    public void UpdateHP(int hp, int hpMax)
+    {
+        if (hpMax <= 0) return;
+
+        // Clamp HP để tránh âm / vượt max
+        hp = Mathf.Clamp(hp, 0, hpMax);
+
+        int prev = currentHP;
+
+        currentHP = hp;
+        maxHP = hpMax;
+
+        // ===== FIX RECONNECT =====
+        // Nếu lần đầu nhận HP từ server mà HP đã = 0 => trụ thường phải biến mất ngay
+        // (case reconnect: prefab spawn lại nhưng server nói trụ đã chết)
+        if (!hasHpFromServer && currentHP <= 0)
+        {
+            if (!IsMainTurret)
+            {
+                Destroy(gameObject);
+            }
+            else
+            {
+                // main turret: vẫn cập nhật UI để EndGameFlow xử lý
+                hasHpFromServer = true;
+                SetHpUIVisible(true);
+                if (txtHP != null) txtHP.text = currentHP.ToString();
+                if (hpFillImage != null) hpFillImage.fillAmount = 0f;
+            }
+            return;
+        }
+
+        // Trường hợp object spawn ra mà đã chết sẵn trên server (giữ lại cho chắc)
+        if (prev < 0 && currentHP <= 0)
+        {
+            if (!IsMainTurret)
+            {
+                Destroy(gameObject);
+            }
+            return;
+        }
+
+        if (!hasHpFromServer)
+        {
+            hasHpFromServer = true;
+            SetHpUIVisible(true);
+        }
+
+        float pct = Mathf.Clamp01((float)currentHP / maxHP);
+
+        if (hpFillImage != null)
+        {
+            hpTween?.Kill();
+            hpTween = hpFillImage
+                .DOFillAmount(pct, hpTweenDuration)
+                .SetEase(Ease.OutQuad);
+        }
+
+        if (txtHP != null)
+            txtHP.text = currentHP.ToString();
+
+        // Auto death CHỈ áp dụng cho trụ thường, không áp dụng cho trụ main
+        if (!IsMainTurret && prev > 0 && currentHP <= 0 && !isDying)
+            OnDeath();
     }
 
     public void OnDeath()
     {
-        // sinh hư nổ trụ
-        Instantiate(prefabNotru, transform.position, transform.rotation);
+        if (isDying) return;
+        isDying = true;
 
-        gameObject.SetActive(false);
+        // Tắt attack & vùng phạm vi
+        attackLine?.gameObject.SetActive(false);
+        if (phamVi != null) phamVi.SetActive(false);
+
+        Transform t = transform;
+
+        DOVirtual.DelayedCall(deathEffectDelay, () =>
+        {
+            // Hiệu ứng vỡ trụ
+            if (prefabNotru != null)
+                Instantiate(prefabNotru, t.position, t.rotation);
+
+            Vector3 startPos = t.position;
+            Vector3 startRot = t.eulerAngles;
+
+            // Tất cả trụ đều tụt xuống theo Y
+            Vector3 targetPos = startPos + new Vector3(0f, deathMoveY, 0f);
+
+            // Khác nhau ở trục xoay:
+            // - Trụ main (id 18, 19): xoay theo Y
+            // - Trụ thường: xoay theo Z
+            Vector3 targetRot;
+            if (IsMainTurret)
+            {
+                // Xoay quanh trục Y
+                targetRot = startRot + new Vector3(0f, deathRotateZ, 0f);
+            }
+            else
+            {
+                // Xoay quanh trục Z (như hiệu ứng cũ của các trụ bé)
+                targetRot = startRot + new Vector3(0f, 0f, deathRotateZ);
+            }
+
+            Sequence seq = DOTween.Sequence();
+
+            // Move xuống
+            seq.Join(
+                t.DOMove(targetPos, deathTweenDuration)
+                 .SetEase(Ease.InQuad)
+            );
+
+            // Xoay theo trục tương ứng
+            seq.Join(
+                t.DORotate(targetRot, deathTweenDuration, RotateMode.Fast)
+                 .SetEase(Ease.InQuad)
+            );
+
+            seq.OnComplete(() =>
+            {
+                Destroy(gameObject);
+            });
+        });
     }
 
-    // private void OnDrawGizmosSelected()
-    // {
-    //     Gizmos.color = Color.red;
-    //     Gizmos.DrawWireSphere(transform.position, attackRange);
-    // }
+    private void InitializeProximityEffect()
+    {
+        if (cam == null)
+            cam = Camera.main;
+
+        if (effectPrefab != null && spawnedEffect == null)
+        {
+            spawnedEffect = Instantiate(effectPrefab, transform.position, Quaternion.identity, transform);
+            spawnedEffect.SetActive(false);
+
+            effectRenderer = spawnedEffect.GetComponentInChildren<Renderer>();
+            if (effectRenderer != null)
+            {
+                effectBounds = effectRenderer.bounds;
+                effectBounds.Expand(boundsPadding);
+            }
+        }
+
+        objectRenderer = GetComponentInChildren<Renderer>();
+        if (objectRenderer != null)
+        {
+            objectBounds = objectRenderer.bounds;
+            objectBounds.Expand(boundsPadding);
+        }
+
+        effectInitialized = true;
+    }
+
+    private void UpdateProximityEffect()
+    {
+        if (!effectInitialized || spawnedEffect == null) return;
+
+        checkTimer += Time.deltaTime;
+        if (checkTimer < checkInterval) return;
+        checkTimer = 0f;
+
+        if (cam == null)
+            cam = Camera.main;
+        if (cam == null) return;
+
+        UpdateBounds();
+
+        Plane[] planes = GeometryUtility.CalculateFrustumPlanes(cam);
+        bool visible =
+            GeometryUtility.TestPlanesAABB(planes, objectBounds) &&
+            GeometryUtility.TestPlanesAABB(planes, effectBounds);
+
+        if (isEffectVisible != visible)
+        {
+            isEffectVisible = visible;
+            spawnedEffect.SetActive(isEffectVisible);
+        }
+    }
+
+    private void UpdateBounds()
+    {
+        objectBounds.center = transform.position;
+        if (spawnedEffect != null)
+            effectBounds.center = spawnedEffect.transform.position;
+    }
+
+    public void Shoot(Transform target)
+    {
+        if (bulletPrefab == null || firePoint == null || target == null)
+            return;
+
+        GameObject bullet = Instantiate(
+            bulletPrefab,
+            firePoint.position,
+            firePoint.rotation
+        );
+
+        bullet.transform.SetParent(null);
+
+        if (bullet.TryGetComponent<Bullet>(out var b))
+        {
+            b.Setup(target, damage);
+        }
+    }
 }

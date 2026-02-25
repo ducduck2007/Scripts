@@ -10,30 +10,29 @@ public class CameraFollow : MonoBehaviour
     public float followSmooth = 5f;
     public float dragSpeed = 0.02f;
 
-    // ========== DYNAMIC CAMERA ROTATION BASED ON LANE ==========
     [Header("Lane-Based Camera Rotation")]
     [Tooltip("Rotation X khi ở mid lane (vùng giữa)")]
     public float midLaneRotationX = 58.5f;
-    
+
     [Tooltip("Rotation X khi ở bot lane (đường dưới - nhìn xuống nhiều hơn)")]
-    public float botLaneRotationX = 66f; // Tăng lên để nhìn xuống
-    
+    public float botLaneRotationX = 66f;
+
     [Tooltip("Rotation X khi ở top lane (đường trên - nhìn xuống ít hơn)")]
-    public float topLaneRotationX = 48f; // Giảm xuống để nhìn ngang hơn
+    public float topLaneRotationX = 48f;
 
     [Tooltip("Rotation Y (giữ nguyên hoặc điều chỉnh nếu cần)")]
     public float baseRotationY = -18f;
-    
+
     [Tooltip("Rotation Z (giữ nguyên hoặc điều chỉnh nếu cần)")]
     public float baseRotationZ = 5f;
 
     [Header("Lane Z Boundaries")]
     [Tooltip("Vị trí Z của mid lane center")]
     public float midLaneZ = 0f;
-    
+
     [Tooltip("Vị trí Z của top lane (z cao)")]
     public float topLaneZ = 150f;
-    
+
     [Tooltip("Vị trí Z của bot lane (z thấp)")]
     public float botLaneZ = -150f;
 
@@ -44,33 +43,29 @@ public class CameraFollow : MonoBehaviour
     private bool isFollow = true;
     private bool isDragging = false;
     private Vector3 lastMousePos;
-    private float currentDynamicRotationX; // Rotation X hiện tại (smooth)
+    private float currentDynamicRotationX;
 
     private void Awake()
     {
         Instance = this;
-        currentDynamicRotationX = midLaneRotationX; // Khởi tạo ở mid
+        currentDynamicRotationX = midLaneRotationX;
     }
 
     public void SetTarget(Transform tran)
     {
         target = tran;
-        // Khởi tạo rotation từ mid lane
         transform.rotation = Quaternion.Euler(midLaneRotationX, baseRotationY, baseRotationZ);
     }
 
     private void LateUpdate()
     {
-        // HandleDrag();
-
         if (isFollow && target != null)
         {
-            UpdateDynamicRotation(); // Cập nhật rotation dựa vào vị trí player
+            UpdateDynamicRotation();
             FollowTarget();
         }
     }
 
-    // ========== DYNAMIC ROTATION BASED ON PLAYER POSITION ==========
     void UpdateDynamicRotation()
     {
         if (target == null) return;
@@ -78,33 +73,26 @@ public class CameraFollow : MonoBehaviour
         float targetZ = target.position.z;
         float targetRotationX;
 
-        // Tính rotation X dựa vào vị trí Z của player
         if (targetZ >= midLaneZ)
         {
-            // Đang ở giữa đi lên top lane (z cao)
-            // Lerp từ midLaneRotationX (57) → topLaneRotationX (52)
             float t = Mathf.InverseLerp(midLaneZ, topLaneZ, targetZ);
             targetRotationX = Mathf.Lerp(midLaneRotationX, topLaneRotationX, t);
         }
         else
         {
-            // Đang ở giữa đi xuống bot lane (z thấp)
-            // Lerp từ midLaneRotationX (57) → botLaneRotationX (63)
             float t = Mathf.InverseLerp(midLaneZ, botLaneZ, targetZ);
             targetRotationX = Mathf.Lerp(midLaneRotationX, botLaneRotationX, t);
         }
 
-        // Smooth transition
         currentDynamicRotationX = Mathf.Lerp(
-            currentDynamicRotationX, 
-            targetRotationX, 
+            currentDynamicRotationX,
+            targetRotationX,
             rotationTransitionSpeed * Time.deltaTime
         );
 
-        // Cập nhật rotation
         transform.rotation = Quaternion.Euler(
-            currentDynamicRotationX, 
-            baseRotationY, 
+            currentDynamicRotationX,
+            baseRotationY,
             baseRotationZ
         );
     }
@@ -121,7 +109,7 @@ public class CameraFollow : MonoBehaviour
 
     public float minDragDistance = 20f;
     private bool isDraggingActive = false;
-    
+
     void HandleDrag()
     {
         if (EventSystem.current.IsPointerOverGameObject())
@@ -174,28 +162,26 @@ public class CameraFollow : MonoBehaviour
         isFollow = value;
     }
 
-    // ========== DEBUG GIZMOS ==========
     private void OnDrawGizmosSelected()
     {
         if (target == null) return;
 
-        // Vẽ 3 vùng lane
         Gizmos.color = Color.green;
         Gizmos.DrawLine(
-            new Vector3(-200, 0, topLaneZ), 
+            new Vector3(-200, 0, topLaneZ),
             new Vector3(200, 0, topLaneZ)
-        ); // Top lane
+        );
 
         Gizmos.color = Color.yellow;
         Gizmos.DrawLine(
-            new Vector3(-200, 0, midLaneZ), 
+            new Vector3(-200, 0, midLaneZ),
             new Vector3(200, 0, midLaneZ)
-        ); // Mid lane
+        );
 
         Gizmos.color = Color.red;
         Gizmos.DrawLine(
-            new Vector3(-200, 0, botLaneZ), 
+            new Vector3(-200, 0, botLaneZ),
             new Vector3(200, 0, botLaneZ)
-        ); // Bot lane
+        );
     }
 }

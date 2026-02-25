@@ -14,7 +14,12 @@ public class ThongBaoController : ManualSingleton<ThongBaoController>
     private void Start()
     {
         DontDestroyOnLoad(gameObject);
+
+        // Đảm bảo luôn render trên cùng
+        Canvas canvas = GetComponent<Canvas>();
+        if (canvas != null) canvas.sortingOrder = 999;
     }
+
     private void OnEnable()
     {
         SceneManager.sceneLoaded += OnSceneLoaded;
@@ -35,10 +40,11 @@ public class ThongBaoController : ManualSingleton<ThongBaoController>
         if (_loadVaoTran != null)
         {
             Destroy(_loadVaoTran.gameObject);
-            _loadVaoTran = null; // ❗ bắt buộc
+            _loadVaoTran = null;
         }
     }
 
+    // ========== LOADING VÀO TRẬN ==========
     private LoadVaoTran _loadVaoTran;
     public LoadVaoTran LoadVaoTran
     {
@@ -51,7 +57,7 @@ public class ThongBaoController : ManualSingleton<ThongBaoController>
         }
     }
 
-
+    // ========== POPUP ONE BUTTON ==========
     private SD_PopupOneButton _PopupOneButton;
     public SD_PopupOneButton PopupOneButton
     {
@@ -64,7 +70,7 @@ public class ThongBaoController : ManualSingleton<ThongBaoController>
         }
     }
 
-
+    // ========== POPUP TWO BUTTON ==========
     private SD_PopupTwoButton _PopupTwoButton;
     public SD_PopupTwoButton PopupTwoButton
     {
@@ -76,6 +82,8 @@ public class ThongBaoController : ManualSingleton<ThongBaoController>
             return _PopupTwoButton;
         }
     }
+
+    // ========== TOAST ==========
     private SD_Toast _toast;
     internal SD_Toast Toast
     {
@@ -87,6 +95,7 @@ public class ThongBaoController : ManualSingleton<ThongBaoController>
         }
     }
 
+    // ========== LOAD MẠNG ==========
     private LoadMang _loadMang;
     internal LoadMang LoadMang
     {
@@ -98,19 +107,84 @@ public class ThongBaoController : ManualSingleton<ThongBaoController>
         }
     }
 
+    // ========== THÔNG BÁO NHANH (Toast) ==========
+    public void ShowThongBaoNhanh(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return;
+        Toast.ShowToast(content);
+    }
+
     public void ShowToast(string content)
     {
-        if (content.Length == 0)
-            return;
-
+        if (string.IsNullOrEmpty(content)) return;
         Toast.ShowToast(content);
     }
 
     public void MakeToast(string content)
     {
-        if (content.Length == 0)
-            return;
-
+        if (string.IsNullOrEmpty(content)) return;
         Toast.MakeToast(content);
     }
+
+    // ========== POPUP LỜI MỜI VÀO PARTY ==========
+    // private LoiMoiVaoParty _loiMoiVaoParty;
+    // public LoiMoiVaoParty LoiMoiVaoParty
+    // {
+    //     get
+    //     {
+    //         if (_loiMoiVaoParty == null)
+    //             _loiMoiVaoParty = AgentUnity.InstanceObject<LoiMoiVaoParty>(Load(PathResource.LoiMoiVaoParty), transform);
+    //         _loiMoiVaoParty.transform.SetAsLastSibling();
+    //         return _loiMoiVaoParty;
+    //     }
+    // }
+
+    // public void ShowLoiMoiVaoParty(int partyId, string inviterName, long inviterId, int memberCount, int maxMembers)
+    // {
+    //     LoiMoiVaoParty.SetInfo(partyId, inviterName, inviterId, memberCount, maxMembers);
+    // }
+
+    // ========== POPUP PARTY MATCH FOUND ==========
+    private PopupPartyMatchFound _partyMatchFound;
+    public PopupPartyMatchFound PartyMatchFound
+    {
+        get
+        {
+            if (_partyMatchFound == null)
+                _partyMatchFound = AgentUnity.InstanceObject<PopupPartyMatchFound>(Load(PathResource.PopupPartyMatchFound), transform);
+            _partyMatchFound.transform.SetAsLastSibling();
+            return _partyMatchFound;
+        }
+    }
+
+    public void ShowPartyMatchFound()
+    {
+        PartyMatchFound.ShowMatchFound();
+    }
+
+    // ========== PARTY INVITE (PopupTwoButton) ==========
+    public void ShowPartyInviteTwoButton(int partyId, string inviterName, long inviterId, int memberCount, int maxMembers)
+    {
+        string title = "Lời mời vào nhóm";
+        string content = $"{inviterName} mời bạn vào party ({memberCount}/{maxMembers}).\nBạn có muốn tham gia không?";
+
+        PopupTwoButton.ShowPopupTwoButton(
+            title,
+            content,
+            "Từ chối",
+            actionOk: () =>
+            {
+                // ✅ báo trước: khi server trả CMD 95 thì mở PopupTimTran
+                PartyDataBase.Instance.PendingOpenPopupTimTran = true;
+
+                // CMD 95 request
+                SendData.AcceptPartyInvite(partyId);
+            },
+            actionExit: () =>
+            {
+                SendData.DeclinePartyInvite(partyId);
+            }
+        );
+    }
+
 }

@@ -4,6 +4,8 @@ using TMPro;
 
 public class MainGame1 : ScaleScreen
 {
+    public static MainGame1 Instance;
+
     public Button btnChienDau, btnThongTin;
     public TextMeshProUGUI txtLevel, txtName;
     public Button btnBanBe, btnSanh, btnShop, btnTuiDo, btnTuong, btnTrangBi, btnNhiemVu, btnChat;
@@ -13,25 +15,40 @@ public class MainGame1 : ScaleScreen
     protected override void Start()
     {
         base.Start();
-        AudioManager.Instance.PlayAudioBg();
-        btnChienDau.onClick.AddListener(ClickChienDau);
-        btnBanBe.onClick.AddListener(ClickBanBe);
-        btnAddTien.onClick.AddListener(ClickAddTien);
-        btnThongTin.onClick.AddListener(ClickTinhNangAn);
-        btnSanh.onClick.AddListener(ClickTinhNangAn);
-        btnShop.onClick.AddListener(ClickTinhNangAn);
-        btnTuiDo.onClick.AddListener(ClickTinhNangAn);
-        btnTuong.onClick.AddListener(ClickTuong);
-        btnTrangBi.onClick.AddListener(ClickTinhNangAn);
-        btnNhiemVu.onClick.AddListener(ClickTinhNangAn);
-        btnGifiCode.onClick.AddListener(ClickTinhNangAn);
-        btnThu.onClick.AddListener(ClickHomThu);
-        btnSetting.onClick.AddListener(ClickTinhNangAn);
-        btnNapDau.onClick.AddListener(ClickTinhNangAn);
-        btnDangNhap.onClick.AddListener(ClickTinhNangAn);
-        btnSuKien.onClick.AddListener(ClickTinhNangAn);
-        btnSkDb.onClick.AddListener(ClickTinhNangAn);
-        btnChat.onClick.AddListener(ClickChat);
+        Instance = this;
+
+        btnChienDau.onClick.AddListener(() => { StopLoginFx(); ClickChienDau(); });
+        btnBanBe.onClick.AddListener(() => { StopLoginFx(); ClickBanBe(); });
+        btnAddTien.onClick.AddListener(() => { StopLoginFx(); ClickAddTien(); });
+        btnThongTin.onClick.AddListener(() => { StopLoginFx(); ClickTinhNangAn(); });
+        btnSanh.onClick.AddListener(() => { StopLoginFx(); ClickTinhNangAn(); });
+        btnShop.onClick.AddListener(() => { StopLoginFx(); ClickTinhNangAn(); });
+        btnTuiDo.onClick.AddListener(() => { StopLoginFx(); ClickTinhNangAn(); });
+        btnTuong.onClick.AddListener(() => { StopLoginFx(); ClickTuong(); });
+        btnTrangBi.onClick.AddListener(() => { StopLoginFx(); ClickTrangBi(); });
+        btnNhiemVu.onClick.AddListener(() => { StopLoginFx(); ClickNhiemVu(); });
+        btnGifiCode.onClick.AddListener(() => { StopLoginFx(); ClickTinhNangAn(); });
+        btnThu.onClick.AddListener(() => { StopLoginFx(); ClickHomThu(); });
+        btnSetting.onClick.AddListener(() => { StopLoginFx(); ClickTinhNangAn(); });
+        btnNapDau.onClick.AddListener(() => { StopLoginFx(); ClickAddTien(); });
+        btnDangNhap.onClick.AddListener(() => { StopLoginFx(); ClickTinhNangAn(); });
+        btnSuKien.onClick.AddListener(() => { StopLoginFx(); ClickSuKien(); });
+        btnSkDb.onClick.AddListener(() => { StopLoginFx(); ClickTinhNangAn(); });
+        btnChat.onClick.AddListener(() => { StopLoginFx(); ClickChat(); });
+
+        ItemInfoCache.EnsureDiskLoaded(debugLog: false);
+    }
+
+    // ==== STOP FX LOGIN ====
+    public void StopLoginFx()
+    {
+        var fx = FindObjectOfType<AutoPlayPingPong>(true);
+        if (fx != null)
+        {
+            fx.Stop();
+            fx.gameObject.SetActive(false);
+            Debug.Log("[LoginFX] Stopped by user click");
+        }
     }
 
     private void ClickAddTien()
@@ -71,6 +88,28 @@ public class MainGame1 : ScaleScreen
         Show(false);
     }
 
+    private void ClickSuKien()
+    {
+        AudioManager.Instance.AudioClick();
+        SendData.GetEventInfo();
+        DialogController.Instance.ShowDialogSuKien();
+    }
+
+    private void ClickNhiemVu()
+    {
+        AudioManager.Instance.AudioClick();
+        SendData.GetEventInfo();
+        DialogController.Instance.ShowDialogSuKien();
+    }
+
+    private void ClickTrangBi()
+    {
+        AudioManager.Instance.AudioClick();
+        ItemInfoCache.EnsureRequested(() => SendData.GetItemInfo(), false, false);
+        DialogController.Instance.ShowDialogTrangBi();
+        Show(false);
+    }
+
     public void SetInfo()
     {
         txtLevel.text = "Lv: " + UserData.Instance.Level;
@@ -83,6 +122,7 @@ public class MainGame1 : ScaleScreen
         SetInfo();
         SendData.OnDataFriend();
         SendData.OnNotifyDataGame();
+        ItemInfoCache.EnsureRequested(() => SendData.GetItemInfo(), false, false);
     }
 
     public void Show(bool val = true)

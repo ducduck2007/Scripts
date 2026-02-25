@@ -13,9 +13,7 @@ public class ItemPlayerGhepTran : MonoBehaviour
     private void Start()
     {
         if (btnPlayer != null)
-        {
             btnPlayer.onClick.AddListener(ClickPlayer);
-        }
     }
 
     public void ClickPlayer()
@@ -25,9 +23,19 @@ public class ItemPlayerGhepTran : MonoBehaviour
 
     public void SetData(ThongTinPlayer data, bool isSang)
     {
-        objTrong.SetActive(isSang == false);
-        objPlayer.SetActive(data != null);
-        txtTen.text = data.tenHienThi;
+        if (objTrong != null) objTrong.SetActive(!isSang);
+
+        bool hasData = data != null;
+        if (objPlayer != null) objPlayer.SetActive(hasData);
+
+        if (!hasData)
+        {
+            idPlayer = 0;
+            if (txtTen != null) txtTen.text = "";
+            return;
+        }
+
         idPlayer = data.idNguoiChoi;
+        if (txtTen != null) txtTen.text = data.tenHienThi ?? "";
     }
 }

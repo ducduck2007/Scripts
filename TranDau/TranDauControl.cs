@@ -1,37 +1,259 @@
-// File: TranDauControl.cs
 using System.Collections.Generic;
 using UnityEngine;
 
 public class TranDauControl : ManualSingleton<TranDauControl>
 {
+    public static readonly Dictionary<long, int> HeroTypeByUserId = new Dictionary<long, int>(128);
+
+    public static void CacheHeroType(long userId, int heroType)
+    {
+        if (userId <= 0 || heroType <= 0) return;
+        HeroTypeByUserId[userId] = heroType;
+    }
+
     public CameraFollow cameraF;
     public PlayerMove[] playerMoves;
     public TruLinh[] truLinhs;
 
-    public PlayerMove playerMove
+    public PlayerMove playerMove => playerMoves[B.Instance.heroPlayer];
+
+    [System.Serializable]
+    public class MonsterPrefabEntry
     {
-        get { return playerMoves[B.Instance.heroPlayer]; }
+        public int campId;
+        public JungleMonster prefab;
+        public float spawnDelaySeconds;
     }
 
-    public PlayerOther[] playerOthers;
-    public PlayerOther playerOther
+    [Header("Monsters (Prefab-based)")]
+    public Transform monstersContainer;
+    public List<MonsterPrefabEntry> monsterPrefabs = new List<MonsterPrefabEntry>(16);
+
+    private readonly Dictionary<int, JungleMonster> _activeMonstersById = new Dictionary<int, JungleMonster>(32);
+    private readonly Dictionary<int, MonsterPrefabEntry> _monsterPrefabMap = new Dictionary<int, MonsterPrefabEntry>(32);
+    private bool _monsterPrefabMapBuilt = false;
+
+    private struct PendingMonsterState
     {
-        get { return playerOthers[B.Instance.heroOther]; }
+        public int id;
+        public int campId;
+        public float x;
+        public float y;
+        public int hp;
+        public int hpMax;
+        public bool hasPos;
+        public bool hasHp;
     }
 
-    public JungleMonster[] jungleMonsters;
+    private readonly Dictionary<int, PendingMonsterState> _pendingMonsterState = new Dictionary<int, PendingMonsterState>(32);
+
+    private readonly Dictionary<int, float> _spawnAtTime = new Dictionary<int, float>(32);
+    private readonly List<int> _spawnOrder = new List<int>(32);
+
+    private void BuildMonsterPrefabMapIfNeeded()
+    {
+        if (_monsterPrefabMapBuilt) return;
+        _monsterPrefabMapBuilt = true;
+        _monsterPrefabMap.Clear();
+
+        for (int i = 0; i < monsterPrefabs.Count; i++)
+        {
+            var e = monsterPrefabs[i];
+            if (e == null || e.prefab == null) continue;
+            _monsterPrefabMap[e.campId] = e;
+        }
+    }
+
+    private float GetSpawnDelayForMonster(int campId)
+    {
+        BuildMonsterPrefabMapIfNeeded();
+        if (_monsterPrefabMap.TryGetValue(campId, out var e) && e != null)
+            return Mathf.Max(0f, e.spawnDelaySeconds);
+        return 0f;
+    }
+
+    private JungleMonster GetPrefabForMonster(int campId)
+    {
+        BuildMonsterPrefabMapIfNeeded();
+        if (_monsterPrefabMap.TryGetValue(campId, out var e) && e != null && e.prefab != null)
+            return e.prefab;
+        return null;
+    }
+
+    private void ScheduleSpawnIfNeeded(int monsterId, int campId)
+    {
+        if (monsterId <= 0) return;
+        if (_activeMonstersById.ContainsKey(monsterId)) return;
+        if (_spawnAtTime.ContainsKey(monsterId)) return;
+
+        float delay = GetSpawnDelayForMonster(campId);
+        _spawnAtTime[monsterId] = Time.time + delay;
+        _spawnOrder.Add(monsterId);
+
+        if (!_pendingMonsterState.TryGetValue(monsterId, out var st))
+            st = new PendingMonsterState { id = monsterId };
+
+        st.campId = campId;
+        _pendingMonsterState[monsterId] = st;
+    }
+
+    private void TrySpawnDueMonsters()
+    {
+        if (_spawnOrder.Count == 0) return;
+        float now = Time.time;
+
+        for (int i = _spawnOrder.Count - 1; i >= 0; i--)
+        {
+            int id = _spawnOrder[i];
+
+            if (!_spawnAtTime.TryGetValue(id, out float at))
+            {
+                _spawnOrder.RemoveAt(i);
+                continue;
+            }
+
+            if (now < at) continue;
+
+            _spawnAtTime.Remove(id);
+            _spawnOrder.RemoveAt(i);
+
+            if (_activeMonstersById.ContainsKey(id))
+                continue;
+
+            if (!_pendingMonsterState.TryGetValue(id, out var st))
+            {
+                Debug.LogError($"[TranDauControl] No pending state for monsterId={id}");
+                continue;
+            }
+
+            var prefab = GetPrefabForMonster(st.campId);
+            if (prefab == null)
+            {
+                var keys = string.Join(", ", _monsterPrefabMap.Keys);
+                Debug.LogError($"[TranDauControl] Missing prefab for campId={st.campId} (monsterId={id}). Registered campIds: [{keys}]");
+                continue;
+            }
+
+            Vector3 pos = st.hasPos ? new Vector3(st.x, 0f, st.y) : Vector3.zero;
+            var m = Instantiate(prefab, pos, Quaternion.identity);
+
+            if (monstersContainer != null)
+                m.transform.SetParent(monstersContainer, true);
+
+            m.id = id;
+            m.campId = st.campId;
+
+            if (st.hasHp || st.hasPos)
+            {
+                m.UpdateFromServer(
+                    st.hasPos ? st.x : m.transform.position.x,
+                    st.hasPos ? st.y : m.transform.position.z,
+                    st.hasHp ? st.hp : 0,
+                    st.hasHp ? st.hpMax : 0);
+            }
+
+            _activeMonstersById[id] = m;
+        }
+    }
 
     public GameObject minionPrefab;
     public Transform minionContainer;
-    private Dictionary<long, MinionMove> activeMinions = new Dictionary<long, MinionMove>();
 
-    // ==================== PLAYER ID MAPPING ====================
-    private readonly Dictionary<long, GameObject> playersByUserId = new Dictionary<long, GameObject>();
+    private readonly Dictionary<long, MinionMove> activeMinions = new Dictionary<long, MinionMove>(64);
+    private readonly Dictionary<long, GameObject> playersByUserId = new Dictionary<long, GameObject>(128);
 
     public GameObject GetPlayerByUserId(long userId)
     {
         playersByUserId.TryGetValue(userId, out var obj);
         return obj;
+    }
+
+    [System.Serializable]
+    public class HeroPrefabEntry
+    {
+        public int heroType;
+        public PlayerOther prefab;
+    }
+
+    public List<HeroPrefabEntry> heroPrefabs = new List<HeroPrefabEntry>(8);
+    public Transform othersContainer;
+
+    private readonly Dictionary<int, PlayerOther> heroPrefabMap = new Dictionary<int, PlayerOther>(16);
+    private readonly List<int> _availableHeroTypes = new List<int>(16);
+    private bool _heroPrefabMapBuilt;
+
+    private readonly Dictionary<long, PlayerOther> othersByUserId = new Dictionary<long, PlayerOther>(64);
+    private readonly HashSet<long> seenOtherIds = new HashSet<long>(64);
+    private readonly List<long> toRemoveOthers = new List<long>(64);
+    private readonly Dictionary<long, float> _lastSeenOtherTime = new Dictionary<long, float>(64);
+
+    [SerializeField] private float otherMissingGraceSeconds = 0.8f;
+
+    private readonly Dictionary<long, TruLinh> _turretById = new Dictionary<long, TruLinh>(32);
+    private bool _turretMapBuilt = false;
+    private bool _reconciledTurretsOnce = false;
+
+    private void BuildHeroPrefabMapIfNeeded()
+    {
+        if (_heroPrefabMapBuilt) return;
+        _heroPrefabMapBuilt = true;
+
+        heroPrefabMap.Clear();
+        _availableHeroTypes.Clear();
+
+        for (int i = 0; i < heroPrefabs.Count; i++)
+        {
+            var e = heroPrefabs[i];
+            if (e == null || e.prefab == null || e.heroType <= 0) continue;
+
+            heroPrefabMap[e.heroType] = e.prefab;
+
+            if (!_availableHeroTypes.Contains(e.heroType))
+                _availableHeroTypes.Add(e.heroType);
+        }
+
+        if (_availableHeroTypes.Count == 0)
+            Debug.LogError("[TranDauControl] heroPrefabs list is empty or invalid.");
+    }
+
+    public int ResolveAndCacheHeroType(long userId, int teamId, int snapshotHeroType)
+    {
+        if (snapshotHeroType > 0)
+        {
+            CacheHeroType(userId, snapshotHeroType);
+            return snapshotHeroType;
+        }
+
+        if (HeroTypeByUserId.TryGetValue(userId, out var cached) && cached > 0)
+            return cached;
+
+        long myId = UserData.Instance != null ? UserData.Instance.UserID : 0;
+
+        if (myId != 0 && userId == myId)
+        {
+            int myHeroType = (B.Instance != null ? B.Instance.heroPlayer + 1 : 0);
+            if (myHeroType > 0)
+            {
+                CacheHeroType(userId, myHeroType);
+                return myHeroType;
+            }
+        }
+
+        BuildHeroPrefabMapIfNeeded();
+        if (_availableHeroTypes.Count == 0)
+            return 0;
+
+        unchecked
+        {
+            long x = userId ^ (userId >> 32);
+            int h = (int)x;
+            h = (h * 16777619) ^ (teamId * 374761393);
+            if (h == int.MinValue) h = 0;
+            int idx = Mathf.Abs(h) % _availableHeroTypes.Count;
+            int ht = _availableHeroTypes[idx];
+            CacheHeroType(userId, ht);
+            return ht;
+        }
     }
 
     private void RegisterPlayer(long userId, GameObject obj)
@@ -40,25 +262,49 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         playersByUserId[userId] = obj;
     }
 
-    // ========== OPTIMIZATION: Cache targets để tránh FindObjectsOfType ==========
-    private readonly List<Transform> cachedPlayerTargets = new List<Transform>();
-    private float refreshCacheTimer = 0f;
+    private readonly List<Transform> cachedPlayerTargets = new List<Transform>(128);
+    private float refreshCacheTimer;
     private const float CACHE_REFRESH_INTERVAL = 1f;
 
-    // ==================== SNAPSHOT STATE (FIX CMD50) ====================
-    private bool _localSetupDone = false;
-    private bool _otherSetupDone = false;
+    private bool _localSetupDone;
+    private readonly Stack<MinionMove> _minionPool = new Stack<MinionMove>(64);
 
-    private long _otherUserId = -1;
-    private int _otherTeamId = -1;
-
-    public virtual void Start()
+    [System.Serializable]
+    public struct SkillCastInfo
     {
-        playersByUserId.Clear();
+        public long attackerId;
+        public int skillId;
+        public int typeSkill;
+        public int projectileId;
 
-        // ==== FIX: clear luôn dictionary minion để tránh rác id/obj sau match mới ====
+        public Vector3 origin;
+        public Vector3 dir;
+
+        public bool hasTarget;
+        public Vector3 targetPos;
+
+        public float speed;
+        public float radius;
+        public float maxRange;
+
+        public int angle;
+    }
+
+    public void Start()
+    {
+        _reconciledTurretsOnce = false;
+        playersByUserId.Clear();
         minionMoves.Clear();
         activeMinions.Clear();
+        BuildTurretMapIfNeeded();
+
+        _localSetupDone = false;
+
+        _activeMonstersById.Clear();
+        _pendingMonsterState.Clear();
+        _spawnAtTime.Clear();
+        _spawnOrder.Clear();
+        _monsterPrefabMapBuilt = false;
 
         for (int i = 0; i < playerMoves.Length; i++)
         {
@@ -67,36 +313,39 @@ public class TranDauControl : ManualSingleton<TranDauControl>
                 playerMoves[i].gameObject.SetActive(true);
                 if (playerMoves[i].HealthBar != null)
                     playerMoves[i].HealthBar.gameObject.SetActive(true);
+                if (playerMoves[i].controller != null)
+                    playerMoves[i].controller.enabled = true;
             }
             else
             {
-                playerMoves[i].controller.enabled = false;
+                if (playerMoves[i].controller != null)
+                    playerMoves[i].controller.enabled = false;
                 playerMoves[i].gameObject.SetActive(false);
             }
         }
 
-        for (int i = 0; i < playerOthers.Length; i++)
+        foreach (var kv in othersByUserId)
         {
-            if (i == B.Instance.heroOther)
-            {
-                playerOthers[i].gameObject.SetActive(true);
-                if (playerOthers[i].HealthBar != null)
-                    playerOthers[i].HealthBar.gameObject.SetActive(true);
-            }
-            else
-            {
-                playerOthers[i].gameObject.SetActive(false);
-            }
+            if (kv.Value == null) continue;
+            kv.Value.gameObject.SetActive(false);
+            if (kv.Value.HealthBar != null)
+                kv.Value.HealthBar.gameObject.SetActive(false);
         }
 
         cameraF.SetTarget(playerMove.transform);
         playerMove.SetPotion();
 
         RefreshTargetCache();
+
+        PlayLoadGate.MarkReady();
+        PlayLoadGate.FlushTo(this);
+        MatchStartGate.TryHideLoading();
     }
 
     private void Update()
     {
+        TrySpawnDueMonsters();
+
         refreshCacheTimer += Time.deltaTime;
         if (refreshCacheTimer >= CACHE_REFRESH_INTERVAL)
         {
@@ -109,45 +358,40 @@ public class TranDauControl : ManualSingleton<TranDauControl>
     {
         cachedPlayerTargets.Clear();
 
-        foreach (var pm in playerMoves)
+        for (int i = 0; i < playerMoves.Length; i++)
         {
+            var pm = playerMoves[i];
             if (pm != null && pm.gameObject.activeSelf)
                 cachedPlayerTargets.Add(pm.transform);
         }
 
-        foreach (var po in playerOthers)
+        foreach (var kv in othersByUserId)
         {
+            var po = kv.Value;
             if (po != null && po.gameObject.activeSelf)
                 cachedPlayerTargets.Add(po.transform);
         }
     }
 
-    // API cho PlayerOther tìm enemy (cache)
     public Transform FindNearestEnemy(Vector3 position, float range, int myTeamId)
     {
         Transform nearest = null;
         float minDist = range * range;
 
-        foreach (var t in cachedPlayerTargets)
+        for (int i = 0; i < cachedPlayerTargets.Count; i++)
         {
+            var t = cachedPlayerTargets[i];
             if (t == null || !t.gameObject.activeSelf) continue;
 
-            // bỏ qua bản thân
-            if (t == this.transform) continue;
-
-            // Team check
-            var pm = t.GetComponent<PlayerMove>();
-            if (pm != null)
+            if (t.TryGetComponent<PlayerMove>(out var pm))
             {
-                // PlayerMove là local player (team của local = B.Instance.teamId)
                 if (myTeamId != 0 && B.Instance.teamId == myTeamId)
                     continue;
             }
 
-            var po = t.GetComponent<PlayerOther>();
-            if (po != null)
+            if (t.TryGetComponent<PlayerOther>(out var po))
             {
-                if (po == playerOther && myTeamId != 0 && po.teamId == myTeamId)
+                if (myTeamId != 0 && po.teamId == myTeamId)
                     continue;
             }
 
@@ -162,104 +406,145 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         return nearest;
     }
 
-    // ==================== FIX CMD50: Init chỉ UPDATE DATA, SETUP 1 LẦN ====================
     public void Init(List<PlayerOutPutSv> playersData)
     {
         if (playersData == null || playersData.Count == 0) return;
-        if (playerMove == null || playerOther == null) return;
+        if (playerMove == null || UserData.Instance == null) return;
 
         long myId = UserData.Instance.UserID;
 
-        // 1) Update local player
+        PlayerOutPutSv myData = null;
         for (int i = 0; i < playersData.Count; i++)
         {
-            var pdata = playersData[i];
-            if (pdata.userId != myId) continue;
+            var p = playersData[i];
+            if (p.userId == myId)
+            {
+                myData = p;
+                break;
+            }
+        }
 
-            playerMove.ApplyServerData(pdata);
+        if (myData != null)
+        {
+            playerMove.ApplyServerData(myData);
 
             if (!_localSetupDone)
             {
-                RegisterPlayer(pdata.userId, playerMove.gameObject);
-                SetupLocalTeamLayersOnce(pdata.teamId);
+                RegisterPlayer(myData.userId, playerMove.gameObject);
+                SetupLocalTeamLayersOnce(myData.teamId);
                 _localSetupDone = true;
-                RefreshTargetCache();
             }
-            break;
         }
 
-        // 2) Update other player (design hiện tại: chỉ có 1 enemy hero object playerOther)
-        PlayerOutPutSv other = default;
-        bool hasOther = false;
+        seenOtherIds.Clear();
+
+        float now = Time.time;
 
         for (int i = 0; i < playersData.Count; i++)
         {
-            var pdata = playersData[i];
-            if (pdata.userId == myId) continue;
+            var p = playersData[i];
+            if (myData != null && p.userId == myId)
+                continue;
 
-            other = pdata;
-            hasOther = true;
-            break;
+            seenOtherIds.Add(p.userId);
+            _lastSeenOtherTime[p.userId] = now;
+
+            int resolvedHeroType = ResolveAndCacheHeroType(p.userId, p.teamId, p.heroType);
+            var po = GetOrCreateOther(p.userId, resolvedHeroType);
+
+            if (po == null)
+            {
+                Debug.LogError($"[Init] Failed to create PlayerOther uid={p.userId}");
+                continue;
+            }
+
+            po.gameObject.SetActive(true);
+            if (po.HealthBar != null)
+                po.HealthBar.gameObject.SetActive(true);
+
+            po.SetTeamId(p.teamId);
+
+            int layer = LayerMask.NameToLayer(p.teamId == 1 ? "player1" : "player2");
+            po.gameObject.layer = layer;
+
+            po.ApplyServerData(new PlayerOutPutSv
+            {
+                userId = p.userId,
+                displayName = p.displayName,
+                teamId = p.teamId,
+                x = p.x,
+                y = p.y,
+                heading = p.heading,
+                speed = p.speed,
+                isMoving = p.isMoving,
+                isAlive = p.isAlive,
+                heroType = resolvedHeroType,
+                hp = p.hp,
+                maxHp = p.maxHp
+            });
+
+            RegisterPlayer(p.userId, po.gameObject);
         }
 
-        if (!hasOther) return;
-
-        // Nếu enemy userId đổi (match mới/reconnect) => reset setup
-        if (_otherUserId != other.userId)
+        toRemoveOthers.Clear();
+        foreach (var kv in othersByUserId)
         {
-            _otherSetupDone = false;
-            _otherUserId = other.userId;
-            _otherTeamId = -1;
+            long uid = kv.Key;
+            var po = kv.Value;
+
+            if (po == null)
+            {
+                toRemoveOthers.Add(uid);
+                continue;
+            }
+
+            if (!seenOtherIds.Contains(uid))
+            {
+                _lastSeenOtherTime.TryGetValue(uid, out float lastSeen);
+                float missingFor = now - lastSeen;
+
+                if (missingFor >= otherMissingGraceSeconds)
+                {
+                    po.gameObject.SetActive(false);
+                    if (po.HealthBar != null)
+                        po.HealthBar.gameObject.SetActive(false);
+                }
+            }
         }
 
-        // Luôn update movement/rotation/hp
-        playerOther.ApplyServerData(other);
-
-        // Setup one-time hoặc khi đổi team
-        if (!_otherSetupDone || _otherTeamId != other.teamId)
+        for (int i = 0; i < toRemoveOthers.Count; i++)
         {
-            _otherTeamId = other.teamId;
-
-            playerOther.SetTeamId(other.teamId);
-
-            int layer = LayerMask.NameToLayer(other.teamId == 1 ? "player1" : "player2");
-            if (playerOther.gameObject.layer != layer)
-                playerOther.gameObject.layer = layer;
-
-            RegisterPlayer(other.userId, playerOther.gameObject);
-
-            _otherSetupDone = true;
-            RefreshTargetCache();
+            long uid = toRemoveOthers[i];
+            othersByUserId.Remove(uid);
+            playersByUserId.Remove(uid);
+            _lastSeenOtherTime.Remove(uid);
         }
+
+        RefreshTargetCache();
+
+        if (_localSetupDone && seenOtherIds.Count > 0)
+            MatchStartGate.MarkBothPlayersReady();
     }
 
     private void SetupLocalTeamLayersOnce(int myTeamId)
     {
+        if (playerMove == null || playerMove.controller == null) return;
+
         if (myTeamId == 1)
         {
             int layer1 = LayerMask.NameToLayer("player1");
-            if (playerMove.controller.gameObject.layer != layer1)
-                playerMove.controller.gameObject.layer = layer1;
-
-            if (playerOther.enemyLayer != layer1)
-                playerOther.enemyLayer = layer1;
+            playerMove.controller.gameObject.layer = layer1;
 
             int layer2Mask = LayerMask.GetMask("player2");
-            if (playerMove.enemyLayer != layer2Mask)
-                playerMove.enemyLayer = layer2Mask;
+            playerMove.enemyLayer = layer2Mask;
         }
         else
         {
             int layer2 = LayerMask.NameToLayer("player2");
-            if (playerMove.controller.gameObject.layer != layer2)
-                playerMove.controller.gameObject.layer = layer2;
-
-            if (playerOther.enemyLayer != layer2)
-                playerOther.enemyLayer = layer2;
+            playerMove.controller.gameObject.layer = layer2;
 
             int layer1Mask = LayerMask.GetMask("player1");
-            if (playerMove.enemyLayer != layer1Mask)
-                playerMove.enemyLayer = layer1Mask;
+            playerMove.enemyLayer = layer1Mask;
         }
     }
 
@@ -267,108 +552,148 @@ public class TranDauControl : ManualSingleton<TranDauControl>
     {
         if (monstersData == null || monstersData.Count == 0) return;
 
-        foreach (var mdata in monstersData)
+        for (int i = 0; i < monstersData.Count; i++)
         {
-            foreach (var monster in jungleMonsters)
-            {
-                if (monster != null && monster.id == mdata.id)
-                {
-                    // ✅ CMD50: chỉ update pos (hp/hpMax=0)
-                    bool hasHp = (mdata.hpMax > 0 || mdata.hp > 0);
+            var mdata = monstersData[i];
+            if (mdata == null || mdata.id <= 0) continue;
 
-                    if (hasHp)
-                    {
-                        monster.UpdateFromServer(mdata.x, mdata.y, mdata.hp, mdata.hpMax);
-                    }
-                    else
-                    {
-                        // chỉ update vị trí, giữ hp hiện tại
-                        monster.UpdateFromServer(mdata.x, mdata.y, 0, 0); // nếu UpdateFromServer overwrite hp khi =0, cần sửa JungleMonster
-                    }
-                    break;
-                }
+            _pendingMonsterState.TryGetValue(mdata.id, out var st);
+            st.id = mdata.id;
+            st.campId = mdata.campId;
+            st.x = mdata.x;
+            st.y = mdata.y;
+            st.hasPos = true;
+
+            if (mdata.hpMax > 0)
+            {
+                st.hp = mdata.hp;
+                st.hpMax = mdata.hpMax;
+                st.hasHp = true;
             }
+            _pendingMonsterState[mdata.id] = st;
+
+            if (_activeMonstersById.TryGetValue(mdata.id, out var existing) && existing != null)
+            {
+                existing.campId = mdata.campId;
+                existing.UpdateFromServer(mdata.x, mdata.y, mdata.hp, mdata.hpMax);
+                continue;
+            }
+
+            SpawnMonsterImmediate(st);
         }
     }
 
-    // ==================== APPLY RESOURCES FROM CMD51 ====================
-
-    public void ApplyMinionResources(List<MinionResourceData> data)
+    private void SpawnMonsterImmediate(PendingMonsterState st)
     {
-        if (data == null || data.Count == 0) return;
-
-        foreach (var r in data)
+        var prefab = GetPrefabForMonster(st.campId);
+        if (prefab == null)
         {
-            if (activeMinions.TryGetValue(r.id, out var m) && m != null)
-            {
-                // giữ pos hiện tại, update hp
-                float x = m.transform.position.x;
-                float y = m.transform.position.z;
-                m.UpdateFromServer(x, y, r.hp, r.maxHp);
-            }
+            var keys = string.Join(", ", _monsterPrefabMap.Keys);
+            Debug.LogError($"[TranDauControl] Missing prefab for campId={st.campId} (monsterId={st.id}). Registered campIds: [{keys}]");
+            return;
         }
+
+        Vector3 pos = st.hasPos ? new Vector3(st.x, 0f, st.y) : Vector3.zero;
+        var m = Instantiate(prefab, pos, Quaternion.identity);
+
+        if (monstersContainer != null)
+            m.transform.SetParent(monstersContainer, true);
+
+        m.id = st.id;
+        m.campId = st.campId;
+
+        m.UpdateFromServer(
+            st.hasPos ? st.x : m.transform.position.x,
+            st.hasPos ? st.y : m.transform.position.z,
+            st.hasHp ? st.hp : 1,
+            st.hasHp ? st.hpMax : 1
+        );
+
+        _activeMonstersById[st.id] = m;
+
+        _spawnAtTime.Remove(st.id);
+        _spawnOrder.Remove(st.id);
     }
 
-    public void ApplyMonsterResources(List<MonsterResourceData> data)
+    public void UpdateMonsterResource(int id, int campId, int hp, int maxHp)
     {
-        if (data == null || data.Count == 0) return;
+        if (id <= 0) return;
 
-        foreach (var r in data)
+        if (_activeMonstersById.TryGetValue(id, out var m) && m != null)
         {
-            foreach (var monster in jungleMonsters)
-            {
-                if (monster != null && monster.id == r.id)
-                {
-                    float x = monster.transform.position.x;
-                    float y = monster.transform.position.z;
-                    monster.UpdateFromServer((int)x, (int)y, r.hp, r.maxHp);
-                    break;
-                }
-            }
+            float x = m.transform.position.x;
+            float y = m.transform.position.z;
+            m.campId = campId;
+            m.UpdateFromServer(x, y, hp, maxHp);
+            return;
         }
-    }
 
-    public void ApplyTurretResources(List<TurretResourceData> data)
-    {
-        if (data == null || data.Count == 0) return;
-
-        foreach (var r in data)
+        _pendingMonsterState.TryGetValue(id, out var st);
+        st.id = id;
+        st.campId = campId;
+        if (maxHp > 0)
         {
-            foreach (var t in truLinhs)
-            {
-                if (t != null && t.idTru == r.id)
-                {
-                    t.UpdateHpFromServer(r.hp, r.maxHp);
-                    break;
-                }
-            }
+            st.hp = hp;
+            st.hpMax = maxHp;
+            st.hasHp = true;
         }
+        _pendingMonsterState[id] = st;
+
+        ScheduleSpawnIfNeeded(id, campId);
     }
 
-    public void SetAttackState(bool isAttack, bool hasTarget)
+    public void UpdateMonsterResourceWithPosition(int id, int campId, int hp, int maxHp, float x, float y)
     {
-        playerOther.SetAttackState(isAttack, hasTarget);
+        if (id <= 0) return;
+
+        if (_activeMonstersById.TryGetValue(id, out var m) && m != null)
+        {
+            m.campId = campId;
+            m.UpdateFromServer(x, y, hp, maxHp);
+            return;
+        }
+
+        _pendingMonsterState.TryGetValue(id, out var st);
+        st.id = id;
+        st.campId = campId;
+        st.x = x;
+        st.y = y;
+        st.hasPos = true;
+        if (maxHp > 0)
+        {
+            st.hp = hp;
+            st.hpMax = maxHp;
+            st.hasHp = true;
+        }
+        _pendingMonsterState[id] = st;
+
+        ScheduleSpawnIfNeeded(id, campId);
     }
 
-    public void SetCastSkillState(int skillId, bool hasTarget)
+    public void MonterDeath(long id)
     {
-        if (skillId == 1) playerOther.CastSkillFromServer(1, hasTarget);
-        else if (skillId == 2) playerOther.CastSkillFromServer(2, hasTarget);
-        else if (skillId == 3) playerOther.CastSkillFromServer(3, hasTarget);
+        int mid = (int)id;
+        if (mid <= 0) return;
+
+        if (_activeMonstersById.TryGetValue(mid, out var m) && m != null)
+            m.Die();
     }
 
-    // ========================= UDP COMPAT WRAPPERS =========================
-    public void SetAttackState(long userId, bool isAttack, bool hasTarget) => OnUdpAttackState(userId, isAttack, hasTarget);
-    public void SetCastSkillState(long userId, int skillId, bool hasTarget) => OnUdpCastSkillState(userId, skillId, hasTarget);
-    public void PlayerDeath(long victimUserId) => OnUdpPlayerDeath(victimUserId);
+    public void SetAttackState(long userId, bool isAttack, bool hasTarget)
+        => OnUdpAttackState(userId, isAttack, hasTarget);
 
-    // Wrapper này hiểu x,y là "Unity position" (đã scale)
+    public void SetCastSkillState(long userId, int skillId, bool hasTarget)
+        => OnUdpCastSkillState(userId, skillId, hasTarget);
+
+    public void PlayerDeath(long victimUserId)
+        => OnUdpPlayerDeath(victimUserId);
+
     public void PlayerRespawn(long userId, int unityX, int unityY, int hp)
     {
         float x = unityX;
         float y = unityY;
 
-        if (userId == UserData.Instance.UserID)
+        if (UserData.Instance != null && userId == UserData.Instance.UserID)
         {
             if (playerMove != null)
             {
@@ -376,11 +701,22 @@ public class TranDauControl : ManualSingleton<TranDauControl>
                 B.Instance.PosZ = y;
                 playerMove.onRespawn(hp);
             }
+
+            if (CanvasController.Instance != null)
+            {
+                var spawn = FindObjectOfType<CanvasSpawn>(true);
+                if (spawn != null) spawn.StopCountdown();
+                CanvasController.Instance.HideSpawnCanvas();
+            }
+
             return;
         }
 
-        if (playerOther != null)
-            playerOther.onRespawn(x, y, hp);
+        var obj = GetPlayerByUserId(userId);
+        if (obj != null && obj.TryGetComponent<PlayerOther>(out var po))
+        {
+            po.onRespawn(x, y, hp);
+        }
     }
 
     public void OnUdpCmd50_SyncPlayers(List<PlayerOutPutSv> playersData)
@@ -390,25 +726,42 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
     public void OnUdpAttackState(long userId, bool isAttack, bool hasTarget)
     {
-        if (userId == UserData.Instance.UserID) return;
-        SetAttackState(isAttack, hasTarget);
+        if (UserData.Instance != null && userId == UserData.Instance.UserID)
+            return;
+
+        var obj = GetPlayerByUserId(userId);
+        if (obj != null && obj.TryGetComponent<PlayerOther>(out var po))
+        {
+            po.SetAttackState(isAttack, hasTarget);
+        }
     }
 
     public void OnUdpCastSkillState(long userId, int skillId, bool hasTarget)
     {
-        if (userId == UserData.Instance.UserID) return;
-        SetCastSkillState(skillId, hasTarget);
+        if (UserData.Instance != null && userId == UserData.Instance.UserID)
+            return;
+
+        var obj = GetPlayerByUserId(userId);
+        if (obj != null && obj.TryGetComponent<PlayerOther>(out var po))
+        {
+            if (skillId == 1) po.CastSkillFromServer(1, hasTarget);
+            else if (skillId == 2) po.CastSkillFromServer(2, hasTarget);
+            else if (skillId == 3) po.CastSkillFromServer(3, hasTarget);
+        }
     }
 
     public void OnUdpPlayerDeath(long victimUserId)
     {
-        if (victimUserId == UserData.Instance.UserID)
+        if (UserData.Instance != null && victimUserId == UserData.Instance.UserID)
         {
-            if (playerMove != null) playerMove.onDeath();
+            if (playerMove != null)
+                playerMove.onDeath();
             return;
         }
 
-        if (playerOther != null) playerOther.onDeath();
+        var obj = GetPlayerByUserId(victimUserId);
+        if (obj != null && obj.TryGetComponent<PlayerOther>(out var po))
+            po.onDeath();
     }
 
     public void OnUdpPlayerRespawn(long userId, int x, int y, int hp)
@@ -416,7 +769,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         float scaledX = x / 2f;
         float scaledY = y / 2f;
 
-        if (userId == UserData.Instance.UserID)
+        if (UserData.Instance != null && userId == UserData.Instance.UserID)
         {
             if (playerMove != null)
             {
@@ -424,41 +777,36 @@ public class TranDauControl : ManualSingleton<TranDauControl>
                 B.Instance.PosZ = scaledY;
                 playerMove.onRespawn(hp);
             }
+
+            if (CanvasController.Instance != null)
+            {
+                var spawn = FindObjectOfType<CanvasSpawn>(true);
+                if (spawn != null) spawn.StopCountdown();
+                CanvasController.Instance.HideSpawnCanvas();
+            }
+
             return;
         }
 
-        if (playerOther != null)
-            playerOther.onRespawn(scaledX, scaledY, hp);
+        var obj = GetPlayerByUserId(userId);
+        if (obj != null && obj.TryGetComponent<PlayerOther>(out var po))
+            po.onRespawn(scaledX, scaledY, hp);
     }
 
-    // ==================== MINION LOGIC (ENABLED) ====================
+    private readonly List<long> _tmpRemoveMinionIds = new List<long>(64);
+    private readonly List<MinionMove> minionMoves = new List<MinionMove>(64);
+
     public void InitMinions(List<MinionOutPutSv> minionsData)
     {
-        if (minionsData == null) return;
+        if (minionsData == null || minionPrefab == null) return;
 
-        if (minionPrefab == null)
+        for (int i = 0; i < minionsData.Count; i++)
         {
-            Debug.LogError("[Minion] minionPrefab is NULL. Assign it in Inspector!");
-            return;
-        }
+            var mdata = minionsData[i];
 
-        foreach (var mdata in minionsData)
-        {
             if (activeMinions.TryGetValue(mdata.id, out var existing) && existing != null)
             {
-                // ✅ CMD50: chỉ update pos. CMD51 mới update hp.
-                bool hasHp = (mdata.maxHp > 0 || mdata.hp > 0);
-
-                if (hasHp)
-                {
-                    existing.UpdateFromServer(mdata.x, mdata.y, mdata.hp, mdata.maxHp);
-                }
-                else
-                {
-                    // chỉ update vị trí, giữ hp hiện tại
-                    var p = existing.transform.position;
-                    existing.UpdateFromServer(mdata.x, mdata.y, 0, 0); // nếu UpdateFromServer overwrite hp khi =0, cần sửa MinionMove (mình note ở dưới)
-                }
+                existing.ApplySnapshot(mdata.x, mdata.y, mdata.isAttack);
             }
             else
             {
@@ -466,62 +814,67 @@ public class TranDauControl : ManualSingleton<TranDauControl>
             }
         }
 
-        // Remove minions that no longer exist
-        List<long> toRemove = new List<long>();
+        _tmpRemoveMinionIds.Clear();
         foreach (var kvp in activeMinions)
         {
-            bool stillExists = minionsData.Exists(m => m.id == kvp.Key);
-            if (!stillExists) toRemove.Add(kvp.Key);
+            bool stillExists = false;
+            for (int i = 0; i < minionsData.Count; i++)
+            {
+                if (minionsData[i].id == kvp.Key)
+                {
+                    stillExists = true;
+                    break;
+                }
+            }
+            if (!stillExists)
+                _tmpRemoveMinionIds.Add(kvp.Key);
         }
 
-        foreach (var id in toRemove)
+        for (int i = 0; i < _tmpRemoveMinionIds.Count; i++)
         {
+            var id = _tmpRemoveMinionIds[i];
             if (activeMinions.TryGetValue(id, out var m) && m != null)
-                Destroy(m.gameObject);
+                ReturnMinionToPool(m);
 
             activeMinions.Remove(id);
 
-            for (int i = minionMoves.Count - 1; i >= 0; i--)
+            for (int k = minionMoves.Count - 1; k >= 0; k--)
             {
-                if (minionMoves[i] == null || minionMoves[i].minionId == id)
-                    minionMoves.RemoveAt(i);
+                if (minionMoves[k] == null || minionMoves[k].minionId == id)
+                    minionMoves.RemoveAt(k);
             }
         }
     }
 
-    private List<MinionMove> minionMoves = new List<MinionMove>();
-
     private void SpawnMinion(MinionOutPutSv data)
     {
-        Debug.Log($"[Minion] Spawn id={data.id} team={data.teamId} pos=({data.x},{data.y}) hp={data.hp}/{data.maxHp}");
-
         Vector3 spawnPos = new Vector3(data.x, 0, data.y);
-        GameObject minionObj = Instantiate(minionPrefab, spawnPos, Quaternion.identity);
+
+        MinionMove minion = GetMinionFromPool();
+        GameObject obj;
+
+        if (minion != null)
+        {
+            obj = minion.gameObject;
+            obj.transform.position = spawnPos;
+            obj.transform.rotation = Quaternion.identity;
+            obj.SetActive(true);
+        }
+        else
+        {
+            obj = Instantiate(minionPrefab, spawnPos, Quaternion.identity);
+            minion = obj.GetComponent<MinionMove>();
+            if (minion == null) minion = obj.AddComponent<MinionMove>();
+        }
 
         if (minionContainer != null)
-        {
-            minionObj.transform.SetParent(minionContainer);
-        }
-
-        MinionMove minion = minionObj.GetComponent<MinionMove>();
-        if (minion == null)
-        {
-            minion = minionObj.AddComponent<MinionMove>();
-        }
+            obj.transform.SetParent(minionContainer, true);
 
         minion.SetData(data.id, data.teamId, data.laneId);
-        minion.UpdateFromServer(data.x, data.y, data.hp, data.maxHp);
+        minion.ApplySnapshot(data.x, data.y, data.isAttack);
 
         activeMinions[data.id] = minion;
         minionMoves.Add(minion);
-    }
-
-    public void MonterDeath(long id)
-    {
-        if (GetQuaiRung(id) != null)
-        {
-            GetQuaiRung(id).Die();
-        }
     }
 
     public void MinionDeath(long id)
@@ -531,7 +884,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
             if (minionMoves[i].minionId == id)
             {
                 minionMoves[i].OnDeath();
-                minionMoves.Remove(minionMoves[i]);
+                minionMoves.RemoveAt(i);
                 return;
             }
         }
@@ -539,68 +892,365 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
     public void TruLinhDeath(int id)
     {
-        if (GetTru(id) != null)
-        {
-            GetTru(id).OnDeath();
-        }
+        var t = GetTru(id);
+        if (t == null)
+            return;
+
+        if (t.maxHP > 0)
+            t.UpdateHP(0, t.maxHP);
+
+        if (t.IsMainTurret)
+            return;
     }
 
-    public void PutTruBan(long idtru, long idTaget, int typeTaget, int team)
+    public void PutTruBan(long idtru, long idTarget, int typeTarget, int team)
     {
-        Transform transform = null;
-        if (typeTaget == 0)
+        Transform tr = null;
+
+        if (typeTarget == 0)
         {
-            if (idTaget == UserData.Instance.UserID) transform = playerMove.transform;
-            else transform = playerOther.transform;
-        }
-        else if (typeTaget == 1)
-        {
-            if (GetLinh(idTaget) != null)
+            if (UserData.Instance != null && idTarget == UserData.Instance.UserID)
+                tr = playerMove?.transform;
+            else
             {
-                transform = GetLinh(idTaget).transform;
+                var obj = GetPlayerByUserId(idTarget);
+                tr = obj != null ? obj.transform : null;
             }
         }
-        if (transform == null) return;
-
-        if (GetTru(idtru) != null)
+        else if (typeTarget == 1)
         {
-            GetTru(idtru).Shoot(transform);
+            var linh = GetLinh(idTarget);
+            if (linh != null)
+                tr = linh.transform;
         }
+
+        if (tr == null) return;
+
+        var tru = GetTru(idtru);
     }
 
-    private TruLinh GetTru(long idtru)
+    public TruLinh GetTru(long idtru)
     {
-        foreach (TruLinh item in truLinhs)
+        for (int i = 0; i < truLinhs.Length; i++)
         {
-            if (item.idTru == idtru)
-            {
-                return item;
-            }
+            var t = truLinhs[i];
+            if (t != null && t.idTru == idtru)
+                return t;
         }
         return null;
     }
 
     private MinionMove GetLinh(long idLinh)
     {
-        foreach (MinionMove item in minionMoves)
+        for (int i = 0; i < minionMoves.Count; i++)
         {
-            if (item.minionId == idLinh)
-            {
+            var item = minionMoves[i];
+            if (item != null && item.minionId == idLinh)
                 return item;
-            }
         }
         return null;
     }
 
-    private JungleMonster GetQuaiRung(long idLinh)
+    public void UpdateMinionResource(long id, int hp, int maxHp)
     {
-        foreach (JungleMonster item in jungleMonsters)
+        if (activeMinions.TryGetValue(id, out var minion) && minion != null)
         {
-            if (item.id == idLinh)
+            float x = minion.transform.position.x;
+            float y = minion.transform.position.z;
+            minion.UpdateFromServer(x, y, hp, maxHp);
+        }
+    }
+
+    public void UpdateTurretResource(long id, int teamId, int hp, int maxHp)
+    {
+        BuildTurretMapIfNeeded();
+
+        if (_turretById.TryGetValue(id, out var t) && t != null)
+        {
+            t.UpdateHP(hp, maxHp);
+            return;
+        }
+
+        int idx = (int)id;
+        if (truLinhs != null && idx >= 0 && idx < truLinhs.Length)
+        {
+            var t2 = truLinhs[idx];
+            if (t2 != null)
             {
-                return item;
+                if (t2.idTru <= 0) t2.idTru = idx;
+                _turretById[t2.idTru] = t2;
+
+                t2.UpdateHP(hp, maxHp);
+                return;
             }
         }
+    }
+
+    private void BuildTurretMapIfNeeded()
+    {
+        if (_turretMapBuilt) return;
+        _turretMapBuilt = true;
+
+        _turretById.Clear();
+
+        if (truLinhs == null) return;
+
+        for (int i = 0; i < truLinhs.Length; i++)
+        {
+            var t = truLinhs[i];
+            if (t == null) continue;
+
+            if (t.idTru <= 0)
+                t.idTru = i;
+
+            long id = t.idTru;
+
+            if (_turretById.ContainsKey(id))
+                continue;
+
+            _turretById[id] = t;
+        }
+    }
+
+    public void ReconcileMissingTurretsFromSnapshot(HashSet<long> presentIds)
+    {
+        if (_reconciledTurretsOnce) return;
+        _reconciledTurretsOnce = true;
+
+        if (truLinhs == null || truLinhs.Length == 0) return;
+        if (presentIds == null || presentIds.Count == 0) return;
+
+        for (int i = 0; i < truLinhs.Length; i++)
+        {
+            var t = truLinhs[i];
+            if (t == null) continue;
+
+            long key = t.idTru > 0 ? t.idTru : i;
+
+            if (!presentIds.Contains(key))
+            {
+                if (!t.IsMainTurret)
+                {
+                    Destroy(t.gameObject);
+                }
+                else
+                {
+                    t.UpdateHP(0, t.maxHP > 0 ? t.maxHP : 1);
+                }
+            }
+        }
+    }
+
+    private MinionMove GetMinionFromPool()
+    {
+        while (_minionPool.Count > 0)
+        {
+            var m = _minionPool.Pop();
+            if (m != null) return m;
+        }
         return null;
+    }
+
+    private void ReturnMinionToPool(MinionMove m)
+    {
+        if (m == null) return;
+        m.gameObject.SetActive(false);
+        _minionPool.Push(m);
+    }
+
+    private PlayerOther GetOrCreateOther(long userId, int heroType)
+    {
+        if (userId <= 0) return null;
+
+        if (othersByUserId.TryGetValue(userId, out var existing) && existing != null)
+        {
+            HeroTypeByUserId.TryGetValue(userId, out var cachedHeroType);
+
+            if (cachedHeroType > 0 && heroType > 0 && cachedHeroType != heroType)
+            {
+                Destroy(existing.gameObject);
+                othersByUserId.Remove(userId);
+                playersByUserId.Remove(userId);
+            }
+            else
+            {
+                return existing;
+            }
+        }
+
+        BuildHeroPrefabMapIfNeeded();
+
+        int resolvedHeroType = (heroType > 0)
+            ? heroType
+            : ResolveAndCacheHeroType(userId, 0, 0);
+
+        PlayerOther prefab = null;
+        heroPrefabMap.TryGetValue(resolvedHeroType, out prefab);
+
+        if (prefab == null && _availableHeroTypes.Count > 0)
+        {
+            int fallbackHero = _availableHeroTypes[0];
+            heroPrefabMap.TryGetValue(fallbackHero, out prefab);
+        }
+
+        if (prefab == null)
+        {
+            Debug.LogError("[TranDauControl] No hero prefab found.");
+            return null;
+        }
+
+        var po = Instantiate(prefab, Vector3.zero, Quaternion.identity);
+
+        if (othersContainer != null)
+            po.transform.SetParent(othersContainer, false);
+
+        po.transform.localPosition = Vector3.zero;
+        po.transform.localRotation = Quaternion.identity;
+        po.transform.localScale = Vector3.one;
+
+        po.gameObject.SetActive(false);
+        othersByUserId[userId] = po;
+
+        return po;
+    }
+
+    public void GetAllPlayerUserIdsNonAlloc(List<long> outIds)
+    {
+        if (outIds == null) return;
+        outIds.Clear();
+
+        foreach (var kv in playersByUserId)
+        {
+            if (kv.Key > 0)
+                outIds.Add(kv.Key);
+        }
+    }
+
+    public void EmergencyMemoryCleanup()
+    {
+        Debug.Log("[TranDauControl] Emergency memory cleanup...");
+
+        HeroTypeByUserId.Clear();
+        playersByUserId.Clear();
+        _lastSeenOtherTime.Clear();
+        seenOtherIds.Clear();
+        toRemoveOthers.Clear();
+
+        var removeKeys = new List<long>(othersByUserId.Count);
+
+        foreach (var kv in othersByUserId)
+        {
+            var po = kv.Value;
+            if (po == null || !po.gameObject.activeInHierarchy)
+            {
+                removeKeys.Add(kv.Key);
+                if (po != null) Destroy(po.gameObject);
+            }
+        }
+
+        foreach (var key in removeKeys)
+        {
+            othersByUserId.Remove(key);
+        }
+
+        var removeMinions = new List<long>(activeMinions.Count);
+
+        foreach (var kv in activeMinions)
+        {
+            var minion = kv.Value;
+            if (minion == null || !minion.gameObject.activeInHierarchy)
+            {
+                removeMinions.Add(kv.Key);
+                if (minion != null)
+                {
+                    minion.gameObject.SetActive(false);
+                    _minionPool.Push(minion);
+                }
+            }
+        }
+
+        foreach (var key in removeMinions)
+        {
+            activeMinions.Remove(key);
+        }
+
+        while (_minionPool.Count > 20)
+        {
+            var m = _minionPool.Pop();
+            if (m != null) Destroy(m.gameObject);
+        }
+
+        cachedPlayerTargets.Clear();
+        minionMoves.TrimExcess();
+
+        Debug.Log($"[TranDauControl] Cleanup done: " +
+                  $"PlayerOthers={othersByUserId.Count}, " +
+                  $"ActiveMinions={activeMinions.Count}, " +
+                  $"PooledMinions={_minionPool.Count}");
+    }
+
+    public void OnUdpSkillCast(SkillCastInfo info)
+    {
+        GameObject attackerObj = GetPlayerByUserId(info.attackerId);
+
+        if (attackerObj == null)
+        {
+            long myId = UserData.Instance != null ? UserData.Instance.UserID : 0;
+            if (myId != 0 && info.attackerId == myId)
+                attackerObj = playerMove != null ? playerMove.gameObject : null;
+        }
+
+        if (attackerObj == null)
+            return;
+
+        SkillCastInfo fixedInfo = info;
+
+        bool needDir = SkillCastProtocol33.UsesDirection(fixedInfo.typeSkill);
+        bool needTarget = SkillCastProtocol33.UsesTargetPos(fixedInfo.typeSkill);
+
+        if (fixedInfo.hasTarget && (needTarget || fixedInfo.dir.sqrMagnitude < 0.0001f))
+        {
+            Vector3 d = fixedInfo.targetPos - fixedInfo.origin;
+            d.y = 0f;
+            if (d.sqrMagnitude > 0.0001f)
+                fixedInfo.dir = d.normalized;
+        }
+
+        if (needDir && fixedInfo.dir.sqrMagnitude > 0.0001f)
+        {
+            fixedInfo.dir.y = 0f;
+            fixedInfo.dir.Normalize();
+        }
+
+        if (needTarget && !fixedInfo.hasTarget)
+        {
+            if (fixedInfo.dir.sqrMagnitude > 0.0001f && fixedInfo.maxRange > 0.01f)
+                fixedInfo.targetPos = fixedInfo.origin + fixedInfo.dir * fixedInfo.maxRange;
+            else
+                fixedInfo.targetPos = fixedInfo.origin;
+
+            fixedInfo.hasTarget = true;
+        }
+
+        if (fixedInfo.dir.sqrMagnitude > 0.0001f)
+        {
+            Vector3 look = fixedInfo.dir;
+            look.y = 0f;
+            Quaternion rot = Quaternion.LookRotation(look);
+
+            if (attackerObj.TryGetComponent<PlayerMove>(out var pm) && pm.controller != null)
+            {
+                pm.controller.transform.rotation = rot;
+            }
+            else
+            {
+                attackerObj.transform.rotation = rot;
+            }
+
+            if (attackerObj.TryGetComponent<PlayerOther>(out var po2))
+                po2.transform.rotation = rot;
+        }
+
+        attackerObj.SendMessage("OnServerSkillCast", fixedInfo, SendMessageOptions.DontRequireReceiver);
     }
 }

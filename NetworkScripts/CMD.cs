@@ -29,8 +29,15 @@
     public const int CANCEL_FIND_MATCH = 46;
 
     // ==================== 50-59: GAME STATE SNAPSHOTS ====================
-    public const int GAME_SNAPSHOT = 50;
+    public const int GAME_SNAPSHOT = 50; // players (JsonArray): userId, teamId, x, y, heading, isMoving, isAlive
+    public const int MINION_SNAPSHOT = 52; // minions (JsonArray): id, teamId, x, y, laneId
+    public const int MONSTER_SNAPSHOT = 53; // monsters (JsonArray): id, campId, x, y
+
     public const int RESOURCE_SNAPSHOT = 51;
+    public const int RESOURCE_MINION_SNAPSHOT = 57; // minions (JsonArray): id, hp, maxHp
+    public const int RESOURCE_MONSTER_SNAPSHOT = 58; // monsters (JsonArray): id, campId, hp, maxHp
+    public const int RESOURCE_TURRET_SNAPSHOT = 59; // turrets (JsonArray): id, teanId, hp, maxHp
+
     public const int MINION_SPAWNED = 55;
     public const int MONSTER_SPAWNED = 56;
 
@@ -62,6 +69,7 @@
     public const int TU_CHOI_KET_BAN = 85;
     public const int PUT_TU_CHOI_KET_BAN = 86;
     public const int DELETE_FRIEND = 86;
+    public const int FRIEND_ONLINE_STATUS = 87;
     public const int FIND_GOI_Y_KET_BAN = 109;
     public const int FIND_FRIEND = 111;
 
@@ -76,13 +84,32 @@
     public const int PARTY_PLAYER_JOINED = 99;
     public const int PARTY_PLAYER_LEFT = 100;
 
+    public const int PARTY_FIND_MATCH = 101;
+    public const int PARTY_CANCEL_FIND = 102;
+    public const int PARTY_MATCH_FOUND = 103;
+    public const int PARTY_ACCEPT_MATCH = 104;
+    public const int PARTY_DECLINE_MATCH = 105;
+
+    public const int PARTY_MATCH_READY = 106;
+    public const int PARTY_MATCH_CANCELLED = 107;
+    public const int JOIN_PARTY_MATCH_AGAIN = 108;
+
     // ==================== 109-126: MISC ====================
     public const int NOTIFY_DATA_GAME = 112;
     public const int PUT_NOTIFY_GAME = 113;
     public const int CHAT_THE_GIOI = 120;
+    public const int CHAT_THE_GIOI_DATA = 121;
+    public const int CHAT_THE_GIOI_HISTORY = 127;
+    public const int CHAT_THE_GIOI_HISTORY_DATA = 128;
     public const int CHAT_FRIEND = 122;
+    public const int CHAT_FRIEND_DATA = 129; // nhận về: fromUserId, fromDisplayName, fromLevel, fromAvatarId, content, timestamps
     public const int READ_CHAT_FRIEND = 124;
-    public const int GET_DATA_CHAT_FRIEND = 125;
+
+    public const int CHAT_IN_MATCH = 125;
+    public const int CHAT_IN_MATCH_DATA = 126;
+
+    public const int VOICE_CHANNEL_JOIN = 140;
+    public const int VOICE_CHANNEL_LEAVE = 141;
 
     // ==================== 200-209: IN-MATCH GOLD ====================
     public const int GOLD_REWARD = 200;
@@ -119,6 +146,12 @@
     public const int CC_SLOW = 283;
     public const int CC_KNOCKUP = 284;
     public const int CC_SILENCE = 285;
+
+    public const int BUY_ITEM = 301;
+    public const int SELL_ITEM = 302;
+    public const int GET_ITEM_INFO = 303;
+
+    public const int GET_EVENT_INFO = 401;
 
     // ==================== SPECIAL ====================
     public const int UDP_HANDSHAKE = 999;

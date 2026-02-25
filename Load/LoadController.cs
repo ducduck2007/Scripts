@@ -1,14 +1,9 @@
 using System.Collections;
-using System.Collections.Generic;
-using Spine.Unity;
 using UnityEngine;
 
 public class LoadController : ManualSingleton<LoadController>
 {
-    private GameObject Load(string namePath)
-    {
-        return Resources.Load(namePath) as GameObject;
-    }
+    private GameObject Load(string namePath) => Resources.Load<GameObject>(namePath);
 
     private GameObject _loadWait;
     public GameObject LoadWait
@@ -16,180 +11,248 @@ public class LoadController : ManualSingleton<LoadController>
         get
         {
             if (_loadWait == null)
-                _loadWait = AgentUnity.InstanceObject(Load(PathResource.LoadWait), transform);
+            {
+                var prefab = Load(PathResource.LoadWait);
+                if (prefab != null) _loadWait = AgentUnity.InstanceObject(prefab, transform);
+                if (_loadWait != null) _loadWait.SetActive(false);
+            }
             return _loadWait;
         }
     }
-    
+
     private GameObject _loadWaitData;
     public GameObject LoadWaitData
     {
         get
         {
             if (_loadWaitData == null)
-                _loadWaitData = AgentUnity.InstanceObject(Load(PathResource.LoadWaitData), transform);
+            {
+                var prefab = Load(PathResource.LoadWaitData);
+                if (prefab != null) _loadWaitData = AgentUnity.InstanceObject(prefab, transform);
+                if (_loadWaitData != null) _loadWaitData.SetActive(false);
+            }
             return _loadWaitData;
         }
     }
-    
-    private LoadPercentChangeInfo _loadPercenChangeInfo;
 
+    private LoadPercentChangeInfo _loadPercenChangeInfo;
     public LoadPercentChangeInfo LoadPercentChangeInfo
     {
         get
         {
             if (_loadPercenChangeInfo == null)
-                _loadPercenChangeInfo =
-                    AgentUnity.InstanceObject<LoadPercentChangeInfo>(Load(PathResource.LoadPercent), transform);
+            {
+                var prefab = Load(PathResource.LoadPercent);
+                if (prefab != null)
+                    _loadPercenChangeInfo = AgentUnity.InstanceObject<LoadPercentChangeInfo>(prefab, transform);
+
+                if (_loadPercenChangeInfo != null)
+                    _loadPercenChangeInfo.gameObject.SetActive(false);
+            }
             return _loadPercenChangeInfo;
         }
     }
 
-    public bool isLoad = false;
+    private bool _isLoad;
+    private Coroutine _coLoadWaitData;
+    private Coroutine _coLoadWait;
+    private Coroutine _coCheckConnect;
+
+    private bool _prewarmed;
+    private bool _lowMemoryTriggered;
+
+    protected override void Awake()
+    {
+        base.Awake();
+        Application.lowMemory += OnLowMemory;
+    }
+
+    private void OnDestroy()
+    {
+        Application.lowMemory -= OnLowMemory;
+    }
+
+    private void OnLowMemory()
+    {
+        _lowMemoryTriggered = true;
+
+        // Tắt ngay UI loading nếu đang bật để giảm áp lực
+        HideLoadWait();
+        HideLoadWaitData();
+
+        // Dọn rác mạnh (đỡ chết ngay trên máy yếu)
+        StartCoroutine(CoEmergencyCleanup());
+    }
+
+    private IEnumerator CoEmergencyCleanup()
+    {
+        // chờ 1 frame cho Unity ổn định
+        yield return null;
+
+        // Unload + GC
+        yield return Resources.UnloadUnusedAssets();
+        System.GC.Collect();
+    }
+
+    /// <summary>
+    /// Prewarm có điều kiện (máy yếu / vừa bị lowMemory => skip)
+    /// </summary>
+    public void PrewarmSafe()
+    {
+        if (_prewarmed) return;
+        _prewarmed = true;
+
+        // Nếu vừa bị low memory thì đừng đụng Resources nữa
+        if (_lowMemoryTriggered) return;
+
+        // Gate theo RAM thiết bị (Tab A7 thường 3GB/4GB; bạn tuỳ chỉnh ngưỡng)
+        // Nếu máy <= 4096MB thì bỏ prewarm để tránh spike lúc vào trận.
+        int ramMb = SystemInfo.systemMemorySize;
+        if (ramMb <= 4096)
+            return;
+
+        _ = LoadWait;
+        _ = LoadWaitData;
+        _ = LoadPercentChangeInfo;
+    }
+
+    // ===== LoadWaitData (delay show) =====
     public void ShowCheckLoadWait(bool val, int time = 10, float timecheck = 0.2f)
     {
-        this.isLoad = val;
-        if (val)
-        {
-            if (_enumLoadWait != null)
-            {
-                StopCoroutine(_enumLoadWait);
-                _enumLoadWait = EnumLoadWait(time, timecheck);
-                StartCoroutine(_enumLoadWait);
-            }
-            else
-            {
-                _enumLoadWait = EnumLoadWait(time, timecheck);
-                StartCoroutine(_enumLoadWait);
-            }
-        }
-        else
-        {
-            if (_enumLoadWait != null)
-            {
-                StopCoroutine(_enumLoadWait);
-            }
+        _isLoad = val;
 
-            DestroyLoadWaitData();
+        if (_coLoadWaitData != null)
+        {
+            StopCoroutine(_coLoadWaitData);
+            _coLoadWaitData = null;
         }
+
+        if (!val)
+        {
+            HideLoadWaitData();
+            return;
+        }
+
+        _coLoadWaitData = StartCoroutine(CoShowLoadWaitData(time, timecheck));
     }
 
-    private IEnumerator _enumLoadWait;
-    private IEnumerator EnumLoadWait(int time, float timecheck)
+    private IEnumerator CoShowLoadWaitData(int time, float timecheck)
     {
         yield return new WaitForSeconds(timecheck);
-        if (this.isLoad)
-        {
-            LoadWaitData.SetActive(true);
-            yield return new WaitForSeconds(time);
-            DestroyLoadWaitData();
-        }
-        yield return null;
-    }
-    
-    private void DestroyLoadWaitData()
-    {
-        if (LoadWaitData.activeInHierarchy)
-        {
-            Destroy(LoadWaitData.gameObject);
-        }
-    }
-    
-    public void ShowLoadWait(bool val = true, float time = 15F)
-    {
-        LoadWait.SetActive(val);
-        if (val)
-        {
-            StopCoroutine(CheckLoadWait(time));
-            StartCoroutine(CheckLoadWait(time));
-        }
-        else
-        {
-            StopCoroutine(CheckLoadWait(time));
-            Destroy(LoadWait.gameObject);
-        }
-    }
-    
-    public void ShowLoadWaitConnectServer(bool val = true, float time = 8F)
-    {
-        if (val)
-        {
-            LoadWait.SetActive(true);
-            if (_isCheckConnect != null)
-            {
-                StopCoroutine(_isCheckConnect);
-                _isCheckConnect = IECheckConnect(time);
-                StartCoroutine(_isCheckConnect);
-            }
-            else
-            {
-                _isCheckConnect = IECheckConnect(time);
-                StartCoroutine(_isCheckConnect);
-            }
-        }
-        else
-        {
-            if (_isCheckConnect != null)
-            {
-                DestroyLoadWait();
-                StopCoroutine(_isCheckConnect);
-            }
-        }
+
+        if (!_isLoad) { _coLoadWaitData = null; yield break; }
+
+        // low mem thì đừng instantiate mới
+        if (_lowMemoryTriggered) { _coLoadWaitData = null; yield break; }
+
+        var o = LoadWaitData;
+        if (o != null) o.SetActive(true);
+
+        yield return new WaitForSeconds(time);
+
+        HideLoadWaitData();
+        _coLoadWaitData = null;
     }
 
-    private IEnumerator _isCheckConnect = null;
+    private void HideLoadWaitData()
+    {
+        if (_loadWaitData != null) _loadWaitData.SetActive(false);
+    }
 
-    private IEnumerator IECheckConnect(float time)
+    // ===== LoadWait (global spinner) =====
+    public void ShowLoadWait(bool val = true, float time = 15f)
+    {
+        if (_coLoadWait != null)
+        {
+            StopCoroutine(_coLoadWait);
+            _coLoadWait = null;
+        }
+
+        if (!val)
+        {
+            HideLoadWait();
+            return;
+        }
+
+        // low mem thì đừng instantiate mới
+        if (_lowMemoryTriggered) return;
+
+        var o = LoadWait;
+        if (o == null) return;
+
+        o.SetActive(true);
+        _coLoadWait = StartCoroutine(CoAutoHideLoadWait(time));
+    }
+
+    private IEnumerator CoAutoHideLoadWait(float time)
     {
         yield return new WaitForSeconds(time);
-        DestroyLoadWait();
+        HideLoadWait();
+        _coLoadWait = null;
+    }
+
+    private void HideLoadWait()
+    {
+        if (_loadWait != null) _loadWait.SetActive(false);
+    }
+
+    // ===== Connect wait =====
+    public void ShowLoadWaitConnectServer(bool val = true, float time = 8f)
+    {
+        if (_coCheckConnect != null)
+        {
+            StopCoroutine(_coCheckConnect);
+            _coCheckConnect = null;
+        }
+
+        if (val)
+        {
+            if (_lowMemoryTriggered) return;
+
+            var o = LoadWait;
+            if (o != null) o.SetActive(true);
+            _coCheckConnect = StartCoroutine(CoCheckConnect(time));
+        }
+        else
+        {
+            HideLoadWait();
+        }
+    }
+
+    private IEnumerator CoCheckConnect(float time)
+    {
+        yield return new WaitForSeconds(time);
+        HideLoadWait();
+        _coCheckConnect = null;
+
         if (!B.Instance.isConnectServerSuccess)
-        {
             NetworkControler.Instance.OnDisconnectServer("");
-        }
     }
 
-    private IEnumerator CheckLoadWait(float time)
-    {
-        yield return new WaitForSeconds(time);
-        DestroyLoadWait();
-    }
-    
-    private void DestroyLoadWait()
-    {
-        if (LoadWait.activeInHierarchy)
-        {
-            Destroy(LoadWait.gameObject);
-        }
-    }
-
+    // ===== Utilities =====
     public void DestroyAllChildsToTime(Transform parent, float time = 1f, bool val = true)
     {
-        if (val)
-        {
-            StopCoroutine(Coroutine(parent, time));
-            StartCoroutine(Coroutine(parent, time));
-        }
-        else
-            StopCoroutine(Coroutine(parent, time));
+        if (!val || parent == null) return;
+        StartCoroutine(CoDestroyChildren(parent, time));
     }
 
-    private IEnumerator Coroutine(Transform parent, float time)
+    private IEnumerator CoDestroyChildren(Transform parent, float time)
     {
         yield return new WaitForSeconds(time);
-        foreach (Transform t in parent)
-        {
-            Object.Destroy(t.gameObject);
-        }
-    }
+        if (parent == null) yield break;
 
-    
+        foreach (Transform t in parent)
+            if (t != null) Object.Destroy(t.gameObject);
+    }
 
     public void ShowLoadPercentChangeInfo(bool isShow)
     {
         C.SetBusy(isShow);
-        LoadPercentChangeInfo.ShowLoadPercent(isShow);
-    }
 
-    
+        if (_lowMemoryTriggered && isShow)
+            return;
+
+        if (LoadPercentChangeInfo != null)
+            LoadPercentChangeInfo.ShowLoadPercent(isShow);
+    }
 }

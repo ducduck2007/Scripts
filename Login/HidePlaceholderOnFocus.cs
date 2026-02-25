@@ -1,57 +1,102 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using TMPro;
 
+[DisallowMultipleComponent]
 public class HidePlaceholderOnFocus : MonoBehaviour, ISelectHandler, IDeselectHandler
 {
-    private InputField _input;
-    private TMP_InputField _tmpInput;
-    private GameObject _placeholderGO;
+    private InputField input;
+    private TMP_InputField tmpInput;
+    private GameObject placeholderGO;
+
+    private Coroutine focusCo;
 
     void Awake()
     {
-        _input = GetComponent<InputField>();
-        if (_input != null && _input.placeholder != null)
+        input = GetComponent<InputField>();
+        if (input != null)
         {
-            _placeholderGO = _input.placeholder.gameObject;
+            if (input.placeholder != null)
+                placeholderGO = input.placeholder.gameObject;
             return;
         }
 
-        _tmpInput = GetComponent<TMP_InputField>();
-        if (_tmpInput != null && _tmpInput.placeholder != null)
-        {
-            _placeholderGO = _tmpInput.placeholder.gameObject;
-        }
+        tmpInput = GetComponent<TMP_InputField>();
+        if (tmpInput != null && tmpInput.placeholder != null)
+            placeholderGO = tmpInput.placeholder.gameObject;
     }
 
     public void OnSelect(BaseEventData eventData)
     {
-        if (_placeholderGO != null)
-            _placeholderGO.SetActive(false);
+        if (placeholderGO != null) placeholderGO.SetActive(false);
 
-        if (_input != null)
-        {
-            _input.ActivateInputField();
-            _input.Select();
-        }
-        else if (_tmpInput != null)
-        {
-            _tmpInput.ActivateInputField();
-            _tmpInput.Select();
-        }
+        if (focusCo != null) StopCoroutine(focusCo);
+        focusCo = StartCoroutine(CoForceCaretNextFrames());
     }
 
     public void OnDeselect(BaseEventData eventData)
     {
-        bool hasText = false;
+        if (focusCo != null)
+        {
+            StopCoroutine(focusCo);
+            focusCo = null;
+        }
 
-        if (_input != null)
-            hasText = !string.IsNullOrEmpty(_input.text);
-        else if (_tmpInput != null)
-            hasText = !string.IsNullOrEmpty(_tmpInput.text);
+        bool hasText =
+            input != null ? !string.IsNullOrEmpty(input.text) :
+            tmpInput != null && !string.IsNullOrEmpty(tmpInput.text);
 
-        if (!hasText && _placeholderGO != null)
-            _placeholderGO.SetActive(true);
+        if (!hasText && placeholderGO != null)
+            placeholderGO.SetActive(true);
+    }
+
+    private IEnumerator CoForceCaretNextFrames()
+    {
+        if (input != null)
+        {
+            input.ActivateInputField();
+        }
+        else if (tmpInput != null)
+        {
+            tmpInput.ActivateInputField();
+        }
+
+        yield return null;
+
+        if (input != null)
+        {
+            input.ActivateInputField();
+            input.caretPosition = input.text.Length;
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(input.transform as RectTransform);
+        }
+        else if (tmpInput != null)
+        {
+            tmpInput.ActivateInputField();
+            tmpInput.ForceLabelUpdate();
+            tmpInput.caretPosition = tmpInput.text.Length;
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(tmpInput.transform as RectTransform);
+        }
+
+        yield return null;
+
+        if (input != null)
+        {
+            input.ActivateInputField();
+            input.caretPosition = input.text.Length;
+        }
+        else if (tmpInput != null)
+        {
+            tmpInput.ActivateInputField();
+            tmpInput.ForceLabelUpdate();
+            tmpInput.caretPosition = tmpInput.text.Length;
+        }
+
+        focusCo = null;
     }
 }

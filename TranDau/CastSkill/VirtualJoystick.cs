@@ -9,25 +9,38 @@ public class VirtualJoystick : MonoBehaviour, IDragHandler, IPointerDownHandler,
     public int Skil;
 
     Vector2 startPos;
+
     public Vector2 Direction { get; private set; }
+    public float Power { get; private set; }
 
     void Awake()
     {
         startPos = handle.anchoredPosition;
         Direction = Vector2.zero;
+        Power = 0f;
     }
 
-    public void OnPointerDown(PointerEventData eventData)
+    public void OnPointerDown(PointerEventData eventData) => Begin(eventData);
+    public void OnDrag(PointerEventData eventData) => ProcessDrag(eventData);
+    public void OnPointerUp(PointerEventData eventData) => End(eventData);
+
+    bool IsCooldown()
     {
-        OnDrag(eventData);
+        return (Skil == 1 && B.Instance.isCooldownSkill1) ||
+               (Skil == 2 && B.Instance.isCooldownSkill2) ||
+               (Skil == 3 && B.Instance.isCooldownSkill3);
     }
 
-    public void OnDrag(PointerEventData eventData)
+    public void Begin(PointerEventData eventData)
     {
-        if (Skil == 1 && B.Instance.isCooldownSkill1 || Skil == 2 && B.Instance.isCooldownSkill2 || Skil == 3 && B.Instance.isCooldownSkill3)
-        {
-            return;
-        }
+        if (IsCooldown()) return;
+        ProcessDrag(eventData);
+    }
+
+    public void ProcessDrag(PointerEventData eventData)
+    {
+        if (IsCooldown()) return;
+
         Vector2 pos;
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             transform as RectTransform,
@@ -36,28 +49,32 @@ public class VirtualJoystick : MonoBehaviour, IDragHandler, IPointerDownHandler,
             out pos
         );
 
-        pos = Vector2.ClampMagnitude(pos, radius);
-        handle.anchoredPosition = pos;
-        Direction = pos.normalized;
+        Vector2 clamped = Vector2.ClampMagnitude(pos, radius);
+        handle.anchoredPosition = clamped;
+
+        float mag = clamped.magnitude;
+        Power = (radius <= 0.0001f) ? 0f : Mathf.Clamp01(mag / radius);
+
+        Direction = (mag > 0.0001f) ? (clamped / mag) : Vector2.zero;
     }
 
-    public void OnPointerUp(PointerEventData eventData)
+    public void End(PointerEventData eventData)
     {
         handle.anchoredPosition = startPos;
         Direction = Vector2.zero;
+        Power = 0f;
     }
-    
-    public void Show() 
+
+    public void Show()
     {
-        // gameObject.SetActive(true);
         BgJt.SetActive(true);
     }
 
     public void Hide()
     {
         BgJt.SetActive(false);
-        // gameObject.SetActive(false);
         handle.anchoredPosition = startPos;
         Direction = Vector2.zero;
+        Power = 0f;
     }
 }

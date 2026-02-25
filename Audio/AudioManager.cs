@@ -133,9 +133,80 @@ public class AudioManager : ManualSingleton<AudioManager>
             audioSound.clip = LoadSound(PathAudio.Vang);
             audioSound.Play();
         }
+    } 
+
+    public void AudioNormalAttack()
+    {
+        if (isSound)
+        {
+            audioSound.clip = LoadSound(PathAudio.NormalAttack);
+            audioSound.PlayOneShot(audioSound.clip);
+        }
     }
-    
-    
+
+    // Audio cho giọng nhân vật
+    public void PlayHeroSound(string heroFolder, HeroSoundType type)
+    {
+    if (!isSound) return;
+
+    string keyword = type switch
+    {
+        HeroSoundType.NormalAttack => "attack",
+        HeroSoundType.Skill        => "spellcast",
+        HeroSoundType.Dying        => "dying",
+        HeroSoundType.Effort       => "effort",
+        HeroSoundType.Taunt        => "taunt",
+        HeroSoundType.Laugh        => "laugh",
+        HeroSoundType.Move         => "move",
+        _ => ""
+    };
+
+    if (string.IsNullOrEmpty(keyword)) return;
+
+    AudioClip[] clips = Resources.LoadAll<AudioClip>($"AudioTuong/{heroFolder}/Voices");
+    if (clips == null || clips.Length == 0) return;
+
+    List<AudioClip> list = new List<AudioClip>();
+    foreach (var c in clips)
+    {
+        if (c.name.ToLower().Contains(keyword))
+            list.Add(c);
+    }
+
+    if (list.Count == 0) return;
+
+    audioSound.PlayOneShot(list[Random.Range(0, list.Count)]);
+    }
+
+    // Audio cho kỹ năng
+    public void PlaySkillSound(string heroFolder)
+    {
+        if(!isSound) return;
+
+        AudioClip[] clips = Resources.LoadAll<AudioClip>($"AudioTuong/{heroFolder}/Skills");
+        if (clips == null || clips.Length == 0) return;
+        
+        List<AudioClip> list = new List<AudioClip>();
+        foreach (var c in clips)
+        {
+            if (c.name.ToLower().Contains("Katana_Swing_Cut".ToLower()))
+                list.Add(c);
+        }
+        if (list.Count == 0) return;
+        audioSound.PlayOneShot(list[Random.Range(0, list.Count)]);
+    }
+
+    public enum HeroSoundType
+    {
+    NormalAttack,
+    Skill,
+    Dying,
+    Effort,
+    Taunt,
+    Laugh,
+    Move
+    }
+
     private static AudioClip LoadSound(string path)
     {
         // path = path.Replace(".mp3", "");

@@ -1,3 +1,4 @@
+using DG.Tweening;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -5,45 +6,58 @@ using UnityEngine.UI;
 public class JungleMonster : MonoBehaviour
 {
     public int id;
+    public int campId;
     public Animator animator;
     public float moveSmooth = 10f;
     public float rotateSmooth = 12f;
     public float deadRespawnTime = 60f;
 
     [Header("Spawn Delay")]
-    public float spawnDelay = 0f; // Thời gian delay trước khi spawn (giây)
+    public float spawnDelay = 0f;
 
     public TextMeshProUGUI txtMau;
     public Image imgFill;
 
     [Header("Camera Culling")]
-    public Camera cam; // Camera chính để kiểm tra tầm nhìn
-    public float checkInterval = 0.5f; // Interval kiểm tra để tối ưu
-    public float boundsPadding = 2f; // Padding thêm cho bounds để tránh tắt/bật liên tục
+    public Camera cam;
+    public float checkInterval = 0.5f;
+    public float boundsPadding = 2f;
 
     private int currentHP;
     private int maxHP;
     private bool isDead = false;
     private bool isSpawning = false;
     private bool isInitialized = false;
+
     private Vector3 targetPos;
     private Vector3 lastPos;
+
     private float respawnTimer = 0f;
     private float spawnDelayTimer = 0f;
     private float lastHpPercent = -1f;
     private float checkTimer = 0f;
+
     private bool isVisible = false;
     private Renderer monsterRenderer;
     private Bounds monsterBounds;
     private Collider monsterCollider;
     private Vector3 originalScale;
 
+    [Header("HP Tween")]
+    public float hpTweenDuration = 0.25f;
+    private Tween hpTween;
+
+    private bool _externalInitDone = false;
+
+    private void Awake()
+    {
+        originalScale = transform.localScale;
+    }
+
     private void Start()
     {
-        // Lưu scale gốc
-        originalScale = transform.localScale;
+        if (_externalInitDone) return;
 
-        // Ẩn hoàn toàn monster cho đến khi hết delay
         SetMonsterActive(false);
 
         targetPos = transform.position;
@@ -52,7 +66,6 @@ public class JungleMonster : MonoBehaviour
         if (animator == null)
             animator = GetComponentInChildren<Animator>();
 
-        // Lấy Renderer để lấy bounds
         monsterRenderer = GetComponentInChildren<Renderer>();
         if (monsterRenderer != null)
         {
@@ -61,31 +74,15 @@ public class JungleMonster : MonoBehaviour
         }
         else
         {
-            // Fallback nếu không có Renderer
             monsterBounds = new Bounds(transform.position, Vector3.one * 2f);
         }
 
-        // Lấy Collider
         monsterCollider = GetComponent<Collider>();
         if (monsterCollider == null)
             monsterCollider = GetComponentInChildren<Collider>();
 
-        // Nếu không gán camera, tìm camera chính
         if (cam == null)
             cam = Camera.main;
-
-        // Khởi tạo delay spawn
-        if (spawnDelay > 0)
-        {
-            spawnDelayTimer = spawnDelay;
-            isSpawning = true;
-        }
-        else
-        {
-            // Không có delay, kích hoạt ngay
-            SetMonsterActive(true);
-            isInitialized = true;
-        }
     }
 
     const float INTERVAL = 1f / 60f;
@@ -95,10 +92,8 @@ public class JungleMonster : MonoBehaviour
     {
         timer += Time.deltaTime;
         if (timer < INTERVAL) return;
-
         timer -= INTERVAL;
 
-        // Xử lý delay spawn
         if (isSpawning)
         {
             HandleSpawnDelay();
@@ -114,20 +109,15 @@ public class JungleMonster : MonoBehaviour
             return;
         }
 
-        // Cập nhật vị trí
         transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * moveSmooth);
         RotateToMoveDirection();
 
-        // Tính toán tốc độ di chuyển
         float speed = (transform.position - lastPos).magnitude / Time.deltaTime;
-
-        // Cập nhật animator nếu đang bật
         if (animator != null && animator.enabled)
             animator.SetBool("isWalking", speed > 0.05f);
 
         lastPos = transform.position;
 
-        // Kiểm tra visibility với interval
         checkTimer += Time.deltaTime;
         if (checkTimer >= checkInterval)
         {
@@ -145,8 +135,6 @@ public class JungleMonster : MonoBehaviour
             isSpawning = false;
             SetMonsterActive(true);
             isInitialized = true;
-
-            // Force kiểm tra visibility ngay sau khi spawn
             CheckVisibility();
         }
     }
@@ -155,49 +143,45 @@ public class JungleMonster : MonoBehaviour
     {
         if (active)
         {
-            // Hiện monster với animation scale
             transform.localScale = Vector3.zero;
             gameObject.SetActive(true);
-
-            // Animation scale up
             StartCoroutine(ScaleUpAnimation());
 
             if (monsterRenderer != null)
                 monsterRenderer.enabled = true;
-
             if (monsterCollider != null)
                 monsterCollider.enabled = true;
-
-            // Bật animator nếu cần
             if (animator != null && isVisible)
                 animator.enabled = true;
+
+            if (imgFill != null) imgFill.enabled = true;
+            if (txtMau != null) txtMau.enabled = true;
         }
         else
         {
-            // Ẩn hoàn toàn
             if (monsterRenderer != null)
                 monsterRenderer.enabled = false;
-
             if (monsterCollider != null)
                 monsterCollider.enabled = false;
-
             if (animator != null)
                 animator.enabled = false;
 
             transform.localScale = Vector3.zero;
+
+            if (imgFill != null) imgFill.enabled = false;
+            if (txtMau != null) txtMau.enabled = false;
         }
     }
 
     private System.Collections.IEnumerator ScaleUpAnimation()
     {
         float duration = 0.5f;
-        float elapsed = 0f;
+        float t = 0f;
 
-        while (elapsed < duration)
+        while (t < duration)
         {
-            elapsed += Time.deltaTime;
-            float t = elapsed / duration;
-            transform.localScale = Vector3.Lerp(Vector3.zero, originalScale, t);
+            t += Time.deltaTime;
+            transform.localScale = Vector3.Lerp(Vector3.zero, originalScale, t / duration);
             yield return null;
         }
 
@@ -206,91 +190,93 @@ public class JungleMonster : MonoBehaviour
 
     private void CheckVisibility()
     {
-        if (!isInitialized || cam == null)
+        if (!isInitialized)
+            return;
+
+        if (cam == null)
         {
             cam = Camera.main;
             if (cam == null) return;
         }
 
-        // Cập nhật bounds nếu monster di chuyển
         monsterBounds.center = transform.position;
 
-        // Kiểm tra xem monster có trong frustum của camera không
         Plane[] planes = GeometryUtility.CalculateFrustumPlanes(cam);
         bool nowVisible = GeometryUtility.TestPlanesAABB(planes, monsterBounds);
 
         if (nowVisible != isVisible)
         {
             isVisible = nowVisible;
-            ToggleAnimator(isVisible);
+            ToggleAnimator(nowVisible);
         }
     }
 
     private void ToggleAnimator(bool enable)
     {
         if (animator == null || !isInitialized) return;
+        animator.enabled = enable;
 
         if (enable)
         {
-            // Bật animator
-            if (!animator.enabled)
-            {
-                animator.enabled = true;
-                animator.Rebind(); // Reset animation state
-                animator.Update(0f); // Cập nhật ngay lập tức
-            }
-        }
-        else
-        {
-            // Tắt animator
-            if (animator.enabled)
-            {
-                animator.enabled = false;
-            }
+            animator.Rebind();
+            animator.Update(0f);
         }
     }
 
     public void UpdateFromServer(float x, float y, int hp, int hpMax)
     {
-        // Không cập nhật nếu chưa hết spawn delay
-        if (isSpawning)
-            return;
+        targetPos = new Vector3(x, transform.position.y, y);
 
         if (!isInitialized)
         {
+            if (originalScale == Vector3.zero)
+                originalScale = transform.localScale;
+
+            if (monsterRenderer == null) monsterRenderer = GetComponentInChildren<Renderer>();
+            if (monsterCollider == null)
+            {
+                monsterCollider = GetComponent<Collider>();
+                if (monsterCollider == null) monsterCollider = GetComponentInChildren<Collider>();
+            }
+            if (animator == null) animator = GetComponentInChildren<Animator>();
+            if (cam == null) cam = Camera.main;
+
+            monsterBounds = monsterRenderer != null
+                ? monsterRenderer.bounds
+                : new Bounds(transform.position, Vector3.one * 2f);
+            monsterBounds.Expand(boundsPadding);
+
+            _externalInitDone = true;
             SetMonsterActive(true);
             isInitialized = true;
         }
 
-        // ✅ CMD50: hpMax = 0 => chỉ update vị trí
-        targetPos = new Vector3(x, transform.position.y, y);
-
-        if (hpMax <= 0)
-            return;
-
-        // ✅ CMD51: có hp/hpMax hợp lệ
-        maxHP = hpMax;
-        currentHP = hp;
-
-        if (txtMau != null)
-            txtMau.text = AgentCSharp.ShowMoneyFull(hp);
-
-        float percent = Mathf.Clamp01((float)currentHP / hpMax);
-        if (Mathf.Abs(lastHpPercent - percent) > 0.01f)
+        if (hpMax > 0)
         {
-            lastHpPercent = percent;
-            if (imgFill != null)
-                imgFill.fillAmount = percent;
-        }
+            maxHP = hpMax;
+            currentHP = hp;
 
-        if (isDead && currentHP > 0)
-            ForceRespawn();
+            if (txtMau != null)
+                txtMau.text = $"{currentHP}/{maxHP}";
+
+            float percent = Mathf.Clamp01((float)currentHP / maxHP);
+            if (Mathf.Abs(lastHpPercent - percent) > 0.01f)
+            {
+                lastHpPercent = percent;
+                if (imgFill != null)
+                {
+                    hpTween?.Kill();
+                    hpTween = imgFill.DOFillAmount(percent, hpTweenDuration).SetEase(Ease.OutQuad);
+                }
+            }
+
+            if (isDead && currentHP > 0)
+                ForceRespawn();
+        }
     }
 
     private void RotateToMoveDirection()
     {
-        if (!isInitialized) return;
-
         Vector3 dir = targetPos - transform.position;
         dir.y = 0;
 
@@ -317,6 +303,9 @@ public class JungleMonster : MonoBehaviour
 
         if (monsterCollider != null)
             monsterCollider.enabled = false;
+
+        if (imgFill != null) imgFill.enabled = false;
+        if (txtMau != null) txtMau.enabled = false;
     }
 
     private void HandleRespawn()
@@ -331,11 +320,7 @@ public class JungleMonster : MonoBehaviour
         isDead = false;
 
         if (animator != null)
-        {
-            animator.ResetTrigger("Die");
-            if (animator.enabled)
-                animator.Play("Idle", 0);
-        }
+            animator.Play("Idle", 0);
 
         if (monsterCollider != null)
             monsterCollider.enabled = true;
@@ -346,17 +331,12 @@ public class JungleMonster : MonoBehaviour
         isDead = false;
 
         if (animator != null)
-        {
-            animator.ResetTrigger("Die");
-            if (animator.enabled)
-                animator.Play("Idle", 0);
-        }
+            animator.Play("Idle", 0);
 
         if (monsterCollider != null)
             monsterCollider.enabled = true;
     }
 
-    // Phương thức để force bật/tắt từ bên ngoài nếu cần
     public void SetVisibility(bool visible)
     {
         if (!isInitialized) return;
@@ -368,13 +348,8 @@ public class JungleMonster : MonoBehaviour
         }
     }
 
-    // Hàm tiện ích để kiểm tra nhanh
-    public bool IsInCameraView()
-    {
-        return isVisible;
-    }
+    public bool IsInCameraView() => isVisible;
 
-    // Hàm để thiết lập spawn delay từ code (nếu cần)
     public void SetSpawnDelay(float delay)
     {
         if (!isInitialized && !isSpawning)
@@ -385,9 +360,5 @@ public class JungleMonster : MonoBehaviour
         }
     }
 
-    // Kiểm tra xem monster đã spawn chưa
-    public bool IsSpawned()
-    {
-        return isInitialized && !isSpawning;
-    }
+    public bool IsSpawned() => isInitialized && !isSpawning;
 }

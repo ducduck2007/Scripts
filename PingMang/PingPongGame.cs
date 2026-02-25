@@ -9,11 +9,11 @@ using Ping = UnityEngine.Ping;
 
 public class PingPongGame : ManualSingleton<PingPongGame>
 {
-    public void PingPong ()
+    public void PingPong()
     {
         if (_enumConnection != null)
         {
-            StopCoroutine (_enumConnection);
+            StopCoroutine(_enumConnection);
             _enumConnection = CheckConnection();
             StartCoroutine(_enumConnection);
         }
@@ -23,12 +23,12 @@ public class PingPongGame : ManualSingleton<PingPongGame>
             StartCoroutine(_enumConnection);
         }
     }
-    
-    public void StopPingPong ()
+
+    public void StopPingPong()
     {
         if (_enumConnection != null)
         {
-            StopCoroutine (_enumConnection);
+            StopCoroutine(_enumConnection);
         }
     }
 
@@ -62,7 +62,7 @@ public class PingPongGame : ManualSingleton<PingPongGame>
                     {
                         if (B.Instance.DemMangYeu >= 5)
                         {
-                            ThongBaoController.Instance.PopupOneButton.ShowPopupThongBao("Kết nối mạng kém. Bạn vui lòng kiểm tra lại kết nối mạng Wifi/3G/4G.");
+                            ThongBaoController.Instance.PopupOneButton.ShowPopupThongBao("Kết nối mạng kém. Bạn vui lòng kiểm tra lại kết nối mạng Wifi/5G.");
                             B.Instance.DemMangYeu = 0;
                             // DemTimeControl.Instance.StartDemTimeDlBaoMangYeu();
                         }
@@ -93,7 +93,7 @@ public class PingPongGame : ManualSingleton<PingPongGame>
                     yield return new WaitForSeconds(0.3f);
                 }
             }
-            
+
             if (Time.timeSinceLevelLoad - startTime > timeout)
             {
                 //yield break;

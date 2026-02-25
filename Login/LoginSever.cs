@@ -2,31 +2,38 @@ using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
+using Firebase.Auth;
+using Firebase.Extensions;
 
 public class LoginSever : ScaleScreen
 {
     public Button btnLogin, btnRegister;
+    public Button buttonGoogleLogin;
+    public Button buttonFacebookLogin;
+
     public InputField inputUserName;
     public InputField inputPassWord;
     [SerializeField] public Toggle tgLuuTaiKhoan;
 
-    public RectTransform rootLogin; // gán = Login (RectTransform)
+    public RectTransform rootLogin;
 
     private Vector2 originPos;
     private Vector2 targetPos;
 
-    // ===== Keyboard handling (fix jump + disable in Editor) =====
     [Header("Keyboard Push Settings")]
-    [SerializeField] private float pushUpScreenRatio = 1f / 6f; // tương đương Screen.height/6f
-    [SerializeField] private float pushLerpSpeed = 12f;         // tốc độ lerp mượt
-    [SerializeField] private int stableFramesRequired = 3;      // debounce để tránh nhấp nháy
+    [SerializeField] private float pushUpScreenRatio = 1f / 6f;
+    [SerializeField] private float pushLerpSpeed = 12f;
+    [SerializeField] private int stableFramesRequired = 3;
 
     private int visibleStableFrames;
     private int hiddenStableFrames;
 
     protected override void OnEnable()
     {
-        base.OnEnable(); // ScaleScreen → Scale()
+        base.OnEnable();
+
+        HideLoginFxIfAny();
+
         originPos = rootLogin.anchoredPosition;
         targetPos = originPos;
 
@@ -50,18 +57,15 @@ public class LoginSever : ScaleScreen
     void Update()
     {
 #if UNITY_ANDROID || UNITY_IOS
-        // ✅ Không xử lý khi đang chạy trong Editor/giả lập (dù build target Android/iOS)
         if (!Application.isMobilePlatform)
             return;
 
         if (!TouchScreenKeyboard.isSupported)
             return;
 
-        // ✅ Chỉ xử lý khi đang focus vào 1 trong 2 ô username/password
         bool anyFocused = (inputUserName != null && inputUserName.isFocused)
                        || (inputPassWord != null && inputPassWord.isFocused);
 
-        // ✅ Dùng area.height ổn định hơn visible (visible hay nhấp nháy lúc mở)
         float kbHeight = TouchScreenKeyboard.area.height;
         bool keyboardShown = anyFocused && kbHeight > 0.01f;
 
@@ -70,7 +74,6 @@ public class LoginSever : ScaleScreen
             visibleStableFrames++;
             hiddenStableFrames = 0;
 
-            // Debounce: chỉ đẩy lên khi trạng thái "shown" ổn định vài frame
             if (visibleStableFrames >= stableFramesRequired)
             {
                 float offset = Screen.height * pushUpScreenRatio;
@@ -82,14 +85,12 @@ public class LoginSever : ScaleScreen
             hiddenStableFrames++;
             visibleStableFrames = 0;
 
-            // Debounce: chỉ kéo xuống khi trạng thái "hidden" ổn định vài frame
             if (hiddenStableFrames >= stableFramesRequired)
             {
                 targetPos = originPos;
             }
         }
 
-        // ✅ Di chuyển mượt để tránh nhảy giật
         rootLogin.anchoredPosition = Vector2.Lerp(
             rootLogin.anchoredPosition,
             targetPos,
@@ -101,8 +102,27 @@ public class LoginSever : ScaleScreen
     protected override void Start()
     {
         base.Start();
+        AudioManager.Instance.PlayAudioBg();
+
+        if (DeepLinkHandler.Instance == null)
+        {
+            GameObject deepLinkObj = new GameObject("DeepLinkHandler");
+            deepLinkObj.AddComponent<DeepLinkHandler>();
+            DontDestroyOnLoad(deepLinkObj);
+        }
+
         btnLogin.onClick.AddListener(ClickLogin);
         btnRegister.onClick.AddListener(ClickRegister);
+
+        if (buttonGoogleLogin != null)
+        {
+            buttonGoogleLogin.onClick.AddListener(ClickGoogleLogin);
+        }
+
+        if (buttonFacebookLogin != null)
+        {
+            buttonFacebookLogin.onClick.AddListener(ClickFacebookLogin);
+        }
 
         tgLuuTaiKhoan.onValueChanged.AddListener((arg0 =>
         {
@@ -148,7 +168,7 @@ public class LoginSever : ScaleScreen
         {
             ThongBaoController.Instance.PopupOneButton.ShowPopupOneButton(
                 "Thông Báo",
-                "Mạng đang bị lỗi, bạn vui lòng kiểm tra lại kết nối Wifi hoặc 3G/4G."
+                "Mạng đang bị lỗi, bạn vui lòng kiểm tra lại kết nối Wifi hoặc 5G."
             );
             return;
         }
@@ -158,27 +178,15 @@ public class LoginSever : ScaleScreen
 
     private IEnumerator ProcessLogin(string userName, string passWord)
     {
+        ShowLoadWait(true);
+
         int cmd = CMDApi.API;
         ApiSend re = new ApiSend(cmd);
 
         try
         {
-            // re.Put("version", Res.VERSION);
             re.Put("username", userName);
             re.Put("password", passWord);
-            // re.Put("platform", CMD.TYPE_FLATFORM);
-            // re.Put("provider", CMD.PROVIDER_ID);
-            // re.Put("imei", AgentUnity.GetImeiDevice());
-            // re.Put("loginType", loginType);
-            // re.Put("ip", AgentUnity.GetLocalIPAddress());
-            // re.Put("macAddress",AgentUnity.GetMacAddress());
-            // re.Put("uuid",AgentUnity.GetUUID());
-            // re.Put("deviceType", SystemInfo.deviceType.ToString());
-            // re.Put("deviceName", SystemInfo.deviceName);
-            // re.Put("deviceModel", SystemInfo.deviceModel);
-            // re.Put("operatingSystemFamily", SystemInfo.operatingSystemFamily.ToString());
-            // re.Put("operatingSystem", SystemInfo.operatingSystem);
-            // re.Put("tokenFirebase", AgentUnity.GetString(KeyLocalSave.PP_TOKEN_FIREBASE));
         }
         catch (Exception e)
         {
@@ -189,7 +197,6 @@ public class LoginSever : ScaleScreen
         UnityEngine.Networking.UnityWebRequest www =
             AgentUnity.GetHttpPost(CMDApi.LINK_GATEWAY_LOGIN, re.GetJson());
 
-        // www.timeout = 10;
         yield return www.SendWebRequest();
 
         try
@@ -213,17 +220,6 @@ public class LoginSever : ScaleScreen
 
                 if (j.GetInt("status") == 1)
                 {
-                    // bool updateVersion = j.GetBool("updateVersion");
-                    // Res.LINK_UPDATE = j.GetString("linkUpdate");
-
-                    // if (updateVersion)
-                    // {
-                    //     ShowLoadWait(false);
-                    //     string thongBaoUpdate = j.GetString("message");
-                    //     SetThongBao(thongBaoUpdate);
-                    //     yield break;
-                    // }
-
                     B.Instance.Keyhash = j.GetString("keyhash");
 
                     AgentUnity.SetString(KeyLocalSave.PP_USERNAME, userName);
@@ -231,6 +227,9 @@ public class LoginSever : ScaleScreen
 
                     Res.IP = j.GetString("server");
                     Res.PORT = j.GetInt("port");
+
+                    Debug.Log("✅ Gateway login successful! Now login game server...");
+
                     SendData.OnLoginGame();
                 }
                 else
@@ -246,9 +245,233 @@ public class LoginSever : ScaleScreen
         }
     }
 
-    private void ShowLoadWait(bool val)
+    private void ClickGoogleLogin()
     {
-        LoadController.Instance.ShowLoadWait(val);
+        AudioManager.Instance.AudioClick();
+
+        if (!AgentUnity.CheckNetWork())
+        {
+            ThongBaoController.Instance.PopupOneButton.ShowPopupOneButton(
+                "Thông Báo",
+                "Mạng đang bị lỗi, bạn vui lòng kiểm tra lại kết nối Wifi hoặc 5G."
+            );
+            return;
+        }
+
+        if (Application.isEditor)
+        {
+            SetThongBao("Google Sign-In không hoạt động trong Unity Editor. Vui lòng build APK!");
+            Debug.LogWarning("⚠️ Google Sign-In không hoạt động trong Unity Editor!");
+            return;
+        }
+
+        if (FirebaseInitializer.Instance == null || !FirebaseInitializer.Instance.IsReady)
+        {
+            SetThongBao("Firebase đang khởi động. Vui lòng đợi 2-3 giây và thử lại!");
+            return;
+        }
+
+        ShowLoadWait(true);
+        StartGoogleSignIn();
+    }
+
+    private async void StartGoogleSignIn()
+    {
+        try
+        {
+            Debug.Log("🌐 Creating Google OAuth provider...");
+
+            var providerData = new Firebase.Auth.FederatedOAuthProviderData
+            {
+                ProviderId = "google.com"
+            };
+
+            var provider = new Firebase.Auth.FederatedOAuthProvider(providerData);
+
+            var result = await FirebaseInitializer.Instance.Auth.SignInWithProviderAsync(provider);
+
+            if (result != null && result.User != null)
+            {
+                string idToken = await result.User.TokenAsync(false);
+                StartCoroutine(ProcessFirebaseLogin(idToken));
+            }
+            else
+            {
+                ShowLoadWait(false);
+                SetThongBao("Đăng nhập Google thất bại");
+            }
+        }
+        catch (Firebase.FirebaseException fbEx)
+        {
+            ShowLoadWait(false);
+            if (fbEx.InnerException != null)
+            {
+                Debug.LogError($"Inner: {fbEx.InnerException.Message}");
+            }
+            SetThongBao($"Lỗi đăng nhập Google.\n\n{fbEx.Message}");
+        }
+        catch (System.Exception e)
+        {
+            ShowLoadWait(false);
+            SetThongBao($"Lỗi đăng nhập Google.\n\n{e.Message}");
+        }
+    }
+
+    private void ClickFacebookLogin()
+    {
+        AudioManager.Instance.AudioClick();
+
+        if (!AgentUnity.CheckNetWork())
+        {
+            ThongBaoController.Instance.PopupOneButton.ShowPopupOneButton(
+                "Thông Báo",
+                "Mạng đang bị lỗi, bạn vui lòng kiểm tra lại kết nối Wifi hoặc 5G."
+            );
+            return;
+        }
+
+        if (Application.isEditor)
+        {
+            SetThongBao("Facebook Login không hoạt động trong Unity Editor. Vui lòng build APK!");
+            return;
+        }
+
+        if (FirebaseInitializer.Instance == null || !FirebaseInitializer.Instance.IsReady)
+        {
+            SetThongBao("Firebase đang khởi động. Vui lòng đợi 2-3 giây và thử lại!");
+            return;
+        }
+
+        string facebookAppId = "1975857273355517";
+        string redirectUri = "https://fir-login-df67f.firebaseapp.com/oauth/callback";
+        string oauthUrl = $"https://www.facebook.com/v12.0/dialog/oauth?client_id={facebookAppId}&redirect_uri={redirectUri}&response_type=token&scope=public_profile";
+
+        Application.OpenURL(oauthUrl);
+
+        if (DeepLinkHandler.Instance != null)
+        {
+            DeepLinkHandler.Instance.OnDeepLinkReceived += OnFacebookDeepLinkReceived;
+        }
+        else
+        {
+            SetThongBao("Lỗi hệ thống. Vui lòng khởi động lại app!");
+        }
+    }
+
+    private void OnFacebookDeepLinkReceived(string url)
+    {
+        if (DeepLinkHandler.Instance != null)
+        {
+            DeepLinkHandler.Instance.OnDeepLinkReceived -= OnFacebookDeepLinkReceived;
+        }
+
+        if (url.Contains("access_token="))
+        {
+            ShowLoadWait(true);
+
+            int startIndex = url.IndexOf("access_token=") + "access_token=".Length;
+            int endIndex = url.IndexOf("&", startIndex);
+            if (endIndex == -1) endIndex = url.Length;
+
+            string accessToken = url.Substring(startIndex, endIndex - startIndex);
+
+            Firebase.Auth.Credential credential = FacebookAuthProvider.GetCredential(accessToken);
+
+            FirebaseInitializer.Instance.Auth.SignInWithCredentialAsync(credential).ContinueWithOnMainThread(task =>
+            {
+                if (task.IsCanceled)
+                {
+                    ShowLoadWait(false);
+                    SetThongBao("Đăng nhập Facebook bị hủy");
+                    return;
+                }
+                if (task.IsFaulted)
+                {
+                    ShowLoadWait(false);
+                    SetThongBao("Lỗi đăng nhập Facebook. Vui lòng thử lại!");
+                    return;
+                }
+
+                FirebaseUser user = task.Result;
+                GetFirebaseTokenAndLogin(user);
+            });
+        }
+        else
+        {
+            SetThongBao("Lỗi xác thực Facebook");
+        }
+    }
+
+    private void GetFirebaseTokenAndLogin(FirebaseUser user)
+    {
+        user.TokenAsync(false).ContinueWithOnMainThread(task =>
+        {
+            if (task.IsCanceled || task.IsFaulted)
+            {
+                ShowLoadWait(false);
+                SetThongBao("Lỗi lấy thông tin xác thực");
+                return;
+            }
+
+            string idToken = task.Result;
+            StartCoroutine(ProcessFirebaseLogin(idToken));
+        });
+    }
+
+    private IEnumerator ProcessFirebaseLogin(string idToken)
+    {
+        int cmd = CMDApi.API;
+        ApiSend re = new ApiSend(cmd);
+
+        try
+        {
+            re.Put("idToken", idToken);
+        }
+        catch (Exception e)
+        {
+            AgentUnity.LogError(e);
+            ShowLoadWait(false);
+        }
+
+        UnityEngine.Networking.UnityWebRequest www =
+            AgentUnity.GetHttpPost(CMDApi.LINK_GATEWAY_FIREBASE_LOGIN, re.GetJson());
+
+        yield return www.SendWebRequest();
+
+        try
+        {
+            if (www.isNetworkError || www.isHttpError)
+            {
+                ShowLoadWait(false);
+                SetThongBao(www.error);
+                yield break;
+            }
+
+            ShowLoadWait(false);
+            JObjectCustom j = JObjectCustom.From(www.downloadHandler.text);
+
+            if (j.GetInt("status") == 1)
+            {
+                B.Instance.Keyhash = j.GetString("keyhash");
+                B.Instance.UserName = j.GetString("userName");
+
+                Debug.Log($"✅ Firebase gateway login OK - Username: {B.Instance.UserName}");
+
+                Res.IP = j.GetString("server");
+                Res.PORT = j.GetInt("port");
+
+                SendData.OnLoginGame();
+            }
+            else
+            {
+                SetThongBao(j.GetString(Key.MESSAGE));
+            }
+        }
+        catch (Exception e)
+        {
+            ShowLoadWait(false);
+            AgentUnity.LogError(e);
+        }
     }
 
     public void ClickRegister()
@@ -256,6 +479,11 @@ public class LoginSever : ScaleScreen
         AudioManager.Instance.AudioClick();
         LoginController.Instance.RegisterView.Show(true);
         View(false);
+    }
+
+    private void ShowLoadWait(bool val)
+    {
+        LoadController.Instance.ShowLoadWait(val);
     }
 
     private void SetThongBao(string msg)
@@ -266,5 +494,45 @@ public class LoginSever : ScaleScreen
     public void View(bool val)
     {
         gameObject.SetActive(val);
+    }
+
+    private void HideLoginFxIfAny()
+    {
+        var fx = FindLoginFxIncludeInactive();
+        if (fx == null) return;
+
+        fx.enabled = false;
+
+        var cg = fx.GetComponent<CanvasGroup>();
+        if (cg != null)
+        {
+            cg.alpha = 0f;
+            cg.blocksRaycasts = false;
+            cg.interactable = false;
+        }
+    }
+
+    private static AutoPlayPingPong FindLoginFxIncludeInactive()
+    {
+#if UNITY_2022_2_OR_NEWER
+        var all = UnityEngine.Object.FindObjectsByType<AutoPlayPingPong>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None
+        );
+        foreach (var fx in all)
+        {
+            if (fx != null && fx.gameObject != null && fx.gameObject.CompareTag("LoginAppearanceFX"))
+                return fx;
+        }
+        return null;
+#else
+        var all = Resources.FindObjectsOfTypeAll<AutoPlayPingPong>();
+        foreach (var fx in all)
+        {
+            if (fx != null && fx.gameObject != null && fx.gameObject.CompareTag("LoginAppearanceFX"))
+                return fx;
+        }
+        return null;
+#endif
     }
 }

@@ -1,5 +1,3 @@
-using UnityEngine;
-
 public class PlayerOutPutSv
 {
     public long userId;
