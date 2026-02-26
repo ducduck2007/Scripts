@@ -128,6 +128,9 @@ public class PlayerMove : MonoBehaviour
     private Vector2 minusHpOriginPos;
     private bool minusHpOriginCached;
 
+    [Header("VFX - Low HP")]
+    [SerializeField] private LowHpVignetteController lowHpVignette;
+
     private void CacheOriginIfNeeded(TMP_Text txt, ref Vector2 origin, ref bool cached)
     {
         if (!cached && txt != null)
@@ -174,6 +177,16 @@ public class PlayerMove : MonoBehaviour
         return null;
     }
 
+    private void Awake()
+    {
+        DisableAllSkillObjects();
+    }
+
+    private void OnEnable()
+    {
+        DisableAllSkillObjects();
+    }
+
     private void Start()
     {
         if (ShouldUseHealthBar())
@@ -190,7 +203,14 @@ public class PlayerMove : MonoBehaviour
         isAlive = true;
         DisableAllAimCanvases();
         CacheOriginIfNeeded(txtMinusHp, ref minusHpOriginPos, ref minusHpOriginCached);
-        DisableAllSkillObjects();
+
+
+        var v = GetLowHpVignette();
+        if (v != null)
+        {
+            float hp01 = (hpMax <= 0f) ? 1f : Mathf.Clamp01(hpCurrent / hpMax);
+            v.SetHpPercent(hp01);
+        }
     }
 
     private void OnDisable()
@@ -1081,6 +1101,13 @@ public class PlayerMove : MonoBehaviour
         hpMax = maxHp;
         hpCurrent = hp;
 
+        var v = GetLowHpVignette();
+        if (v != null)
+        {
+            float hp01 = (hpMax <= 0f) ? 1f : Mathf.Clamp01(hpCurrent / hpMax);
+            v.SetHpPercent(hp01);
+        }
+
         if (!ShouldUseHealthBar() || HealthBar == null) return;
 
         try
@@ -1408,4 +1435,18 @@ public class PlayerMove : MonoBehaviour
         }
     }
 
+    private LowHpVignetteController GetLowHpVignette()
+    {
+        if (lowHpVignette != null) return lowHpVignette;
+
+        // tìm cả inactive
+        lowHpVignette = FindObjectOfType<LowHpVignetteController>(true);
+        return lowHpVignette;
+    }
+
+    public void OnDamageTaken_Local()
+    {
+        var v = GetLowHpVignette();
+        if (v != null) v.PulseDamageOnce();
+    }
 }

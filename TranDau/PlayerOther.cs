@@ -143,6 +143,16 @@ public class PlayerOther : MonoBehaviour
         txt.color = c;
     }
 
+    private void Awake()
+    {
+        DisableAllSkillObjects();
+    }
+
+    private void OnEnable()
+    {
+        DisableAllSkillObjects();
+    }
+
     void Start()
     {
         CachePhysicsIfNeeded();
