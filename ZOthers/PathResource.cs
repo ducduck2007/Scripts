@@ -38,7 +38,8 @@ public class PathResource
     public const string LoadWait = "Load/LoadWait";
     public const string LoadWaitData = "Load/LoadWait";
     public const string LoadPercent = "Load/LoadPercentChangeInfo";
-    public const string LoadVaoTran = "Load/LoadVaoTran";
+    // public const string LoadVaoTran = "Load/LoadVaoTran";
+    public const string LoadVaoTran = "Load/LoadVaoTran2";
 
     public const string DialogBanBe = "BanBe/PopupBanBe";
     public const string LoiMoiKetBan = "BanBe/LoiMoiKetBan";

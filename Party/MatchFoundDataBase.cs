@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 public class MatchFoundDataBase
 {
-    // ========== SINGLETON (giống FriendDataBase) ==========
+    // ========== SINGLETON ==========
     private static MatchFoundDataBase instance;
 
     public static MatchFoundDataBase Instance
@@ -19,6 +21,13 @@ public class MatchFoundDataBase
         }
     }
 
+    // ========== MATCH PLAYER INFO ==========
+    public class MatchPlayer
+    {
+        public long UserId;
+        public bool Accepted;
+    }
+
     // ========== MATCH STATE ==========
     public bool HasPendingMatch { get; private set; }
     public int MatchId { get; private set; } = -1;
@@ -30,6 +39,9 @@ public class MatchFoundDataBase
     public string MapName { get; private set; } = "";
     public int TeamSize { get; private set; } = 1;
 
+    public List<MatchPlayer> Team1Players { get; private set; } = new List<MatchPlayer>();
+    public List<MatchPlayer> Team2Players { get; private set; } = new List<MatchPlayer>();
+
     private float _remainingSeconds;
     private bool _isCounting;
 
@@ -40,7 +52,7 @@ public class MatchFoundDataBase
     public event Action OnMatchCancelled;
     public event Action<float> OnTimerTick;
 
-    // ========== CONSTRUCTOR (private) ==========
+    // ========== CONSTRUCTOR ==========
     private MatchFoundDataBase()
     {
         Debug.Log("[MatchFoundDataBase] Initialized");
@@ -58,6 +70,8 @@ public class MatchFoundDataBase
         ModeId = -1;
         MapName = "";
         TeamSize = 1;
+        Team1Players.Clear();
+        Team2Players.Clear();
         _remainingSeconds = 0;
         _isCounting = false;
     }
@@ -81,7 +95,39 @@ public class MatchFoundDataBase
             _remainingSeconds = TimeoutMs / 1000f;
             _isCounting = true;
 
-            Debug.Log($"[MatchFoundDataBase] Match found: MatchId={MatchId}, {TotalPlayers} players, {TeamSize}v{TeamSize}");
+            // Parse đội 1
+            Team1Players.Clear();
+            if (msg.ConstainsKey("doi1"))
+            {
+                JArray doi1 = msg.GetJArray("doi1");
+                for (int i = 0; i < doi1.Count; i++)
+                {
+                    JObject json = (JObject)doi1[i];
+                    Team1Players.Add(new MatchPlayer
+                    {
+                        UserId = json.Value<long>("userId"),
+                        Accepted = json.Value<bool>("accepted")
+                    });
+                }
+            }
+
+            // Parse đội 2
+            Team2Players.Clear();
+            if (msg.ConstainsKey("doi2"))
+            {
+                JArray doi2 = msg.GetJArray("doi2");
+                for (int i = 0; i < doi2.Count; i++)
+                {
+                    JObject json = (JObject)doi2[i];
+                    Team2Players.Add(new MatchPlayer
+                    {
+                        UserId = json.Value<long>("userId"),
+                        Accepted = json.Value<bool>("accepted")
+                    });
+                }
+            }
+
+            Debug.Log($"[MatchFoundDataBase] Match found: MatchId={MatchId}, {TotalPlayers} players, {TeamSize}v{TeamSize}, doi1={Team1Players.Count}, doi2={Team2Players.Count}");
 
             OnMatchFound?.Invoke();
         }
@@ -97,6 +143,26 @@ public class MatchFoundDataBase
         try
         {
             AcceptedCount = TryGetInt(msg, "soNguoiDaChapNhanTranDau", 0);
+
+            if (msg.ConstainsKey("danhSachTrangThaiChapNhan"))
+            {
+                JArray danhSach = msg.GetJArray("danhSachTrangThaiChapNhan");
+                for (int i = 0; i < danhSach.Count; i++)
+                {
+                    JObject json = (JObject)danhSach[i];
+                    long userId = json.Value<long>("userId");
+                    bool accepted = json.Value<bool>("accepted");
+
+                    foreach (var p in Team1Players)
+                    {
+                        if (p.UserId == userId) { p.Accepted = accepted; break; }
+                    }
+                    foreach (var p in Team2Players)
+                    {
+                        if (p.UserId == userId) { p.Accepted = accepted; break; }
+                    }
+                }
+            }
 
             Debug.Log($"[MatchFoundDataBase] Accept progress: {AcceptedCount}/{TotalPlayers}");
 
@@ -133,20 +199,18 @@ public class MatchFoundDataBase
     // ========== TIMER UPDATE ==========
     public void Update()
     {
-        if (_isCounting && _remainingSeconds > 0)
+        if (_isCounting)
         {
             _remainingSeconds -= Time.deltaTime;
 
-            if (_remainingSeconds <= 0)
+            if (_remainingSeconds <= -1f)
             {
                 _remainingSeconds = 0;
                 _isCounting = false;
-
-                // Auto decline khi hết time
                 SendData.PartyDeclineMatch();
             }
 
-            OnTimerTick?.Invoke(_remainingSeconds);
+            OnTimerTick?.Invoke(Mathf.Max(_remainingSeconds, 0f));
         }
     }
 

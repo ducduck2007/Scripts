@@ -323,7 +323,7 @@ public class PopupTimTran : ScaleScreen
         UpdateTimerUI();
     }
 
-    private void StopFindingMatchUI()
+    public void StopFindingMatchUI()
     {
         if (btnTimTran) btnTimTran.interactable = true;
         if (objHuBtn) objHuBtn.SetActive(false);
