@@ -142,6 +142,9 @@ public class MainGame1 : ScaleScreen
     private void ClickChienDau()
     {
         AudioManager.Instance.AudioClick();
+        // Tắt notify khi vào chiến đấu
+        if (NotifyController.Instance != null)
+            NotifyController.Instance.StopNotify();
         DialogController.Instance.ShowDialogChonPhong();
         Show(false);
     }

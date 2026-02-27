@@ -1,8 +1,13 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class TranDauControl : ManualSingleton<TranDauControl>
 {
+    [Header("Spawn Effect")]
+    public GameObject spawnEffectPrefab;
+    public float spawnEffectDuration = 2f;
+
     public static readonly Dictionary<long, int> HeroTypeByUserId = new Dictionary<long, int>(128);
 
     public static void CacheHeroType(long userId, int heroType)
@@ -310,11 +315,12 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         {
             if (i == B.Instance.heroPlayer)
             {
-                playerMoves[i].gameObject.SetActive(true);
+                playerMoves[i].gameObject.SetActive(false); // tắt hẳn
                 if (playerMoves[i].HealthBar != null)
-                    playerMoves[i].HealthBar.gameObject.SetActive(true);
+                    playerMoves[i].HealthBar.gameObject.SetActive(false); // ẩn tạm
                 if (playerMoves[i].controller != null)
-                    playerMoves[i].controller.enabled = true;
+                    playerMoves[i].controller.enabled = false; // khóa tạm
+                playerMoves[i].isInputLocked = true;
             }
             else
             {
@@ -332,13 +338,10 @@ public class TranDauControl : ManualSingleton<TranDauControl>
                 kv.Value.HealthBar.gameObject.SetActive(false);
         }
 
-        cameraF.SetTarget(playerMove.transform);
-        playerMove.SetPotion();
-
         RefreshTargetCache();
-
         PlayLoadGate.MarkReady();
         PlayLoadGate.FlushTo(this);
+        StartCoroutine(CoSpawnEffectThenReveal());
         MatchStartGate.TryHideLoading();
     }
 
@@ -1252,5 +1255,39 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         }
 
         attackerObj.SendMessage("OnServerSkillCast", fixedInfo, SendMessageOptions.DontRequireReceiver);
+    }
+
+    private IEnumerator CoSpawnEffectThenReveal()
+    {
+        var pm = playerMove;
+        if (pm == null) yield break;
+
+        // Bắt đầu đếm giờ
+        if (GameTimerManager.Instance != null)
+            GameTimerManager.Instance.StartTimer();
+
+        Vector3 pos = new Vector3(B.Instance.PosX, 0f, B.Instance.PosZ);
+
+        // Spawn hiệu ứng
+        GameObject effectInstance = null;
+        if (spawnEffectPrefab != null)
+            effectInstance = Instantiate(spawnEffectPrefab, pos, Quaternion.identity);
+
+        // Camera bay intro — cần set target trước để tính end pos
+        cameraF.SetTarget(pm.transform);
+        cameraF.PlayIntroFlyTo(spawnEffectDuration);
+
+        yield return new WaitForSeconds(spawnEffectDuration);
+
+        if (effectInstance != null)
+            Destroy(effectInstance);
+
+        // Bật nhân vật
+        pm.gameObject.SetActive(true);
+        pm.SetPotion();
+        pm.isInputLocked = false;
+
+        if (pm.HealthBar != null)
+            pm.HealthBar.gameObject.SetActive(true);
     }
 }

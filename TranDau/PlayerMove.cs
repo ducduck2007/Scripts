@@ -28,6 +28,9 @@ public class PlayerMove : MonoBehaviour
     public float hpMax;
     public float hpCurrent;
 
+    [Header("Spawn Lock")]
+    [HideInInspector] public bool isInputLocked = false;
+
     [System.Serializable]
     public class SkillConfig
     {
@@ -192,6 +195,8 @@ public class PlayerMove : MonoBehaviour
 
     private void Start()
     {
+        isInputLocked = false; // ← thêm dòng này đầu tiên
+
         if (ShouldUseHealthBar())
         {
             SafeSetThanhMau(0);
@@ -256,7 +261,7 @@ public class PlayerMove : MonoBehaviour
         if (timer < INTERVAL) return;
         timer -= INTERVAL;
 
-        if (!isAlive)
+        if (!isAlive || isInputLocked)
         {
             animator.SetFloat("Speed", 0f);
             return;
@@ -335,7 +340,7 @@ public class PlayerMove : MonoBehaviour
 
     public void NormalAttack()
     {
-        if (!isAlive || IsBusy()) return;
+        if (!isAlive || IsBusy() || isInputLocked) return;
 
         AudioManager.Instance.PlayHeroSound(GetHeroKey(), AudioManager.HeroSoundType.Effort);
         AudioManager.Instance.AudioNormalAttack();
@@ -1436,6 +1441,7 @@ public class PlayerMove : MonoBehaviour
 
     public bool TryCastSkill(int skill, int autoFlag = 0)
     {
+        if (isInputLocked) return false;
         bool wasCasting = isSkillCasting;
         CastSkill(skill, autoFlag);
         return (!wasCasting && isSkillCasting);

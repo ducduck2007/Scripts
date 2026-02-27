@@ -995,9 +995,9 @@ public class MenuController : ScaleScreen
         float dur = (tr != null) ? tr.GetHoldDurationNow() : -1f;
         bool quick = (tr != null) && tr.IsQuickTapNow();
 
-#if UNITY_EDITOR
-        Debug.Log($"[CAST TAP] dur={dur:0.000}s quick={quick}");
-#endif
+        // #if UNITY_EDITOR
+        //         Debug.Log($"[CAST TAP] dur={dur:0.000}s quick={quick}");
+        // #endif
 
         return quick ? 1 : 0;
     }
