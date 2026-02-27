@@ -28,6 +28,9 @@ public class Register : ScaleScreen
     [SerializeField] private float pushLerpSpeed = 12f;         // tốc độ lerp mượt
     [SerializeField] private int stableFramesRequired = 3;      // debounce để tránh nhấp nháy
 
+    private bool _keyboardVisible = false;
+    private RectTransform _focusedInputRect;
+
     private int visibleStableFrames;
     private int hiddenStableFrames;
 
@@ -41,14 +44,43 @@ public class Register : ScaleScreen
         btnQuayLai.onClick.AddListener(ClickLogin);
         tgEyePassword.onValueChanged.AddListener(arg0 => SetEyePassword());
         tgEyeRePassword.onValueChanged.AddListener(arg0 => SetEyeRePassword());
-        ifUsername.onSubmit.AddListener(_ =>
+
+        ifUsername.onSubmit.AddListener(_ => ifPassword.ActivateInputField());
+        ifPassword.onSubmit.AddListener(_ => ifRePassword.ActivateInputField());
+
+        ifUsername.onSelect.AddListener(_ => OnInputFocused(ifUsername.GetComponent<RectTransform>(), 0.2f));
+        ifPassword.onSelect.AddListener(_ => OnInputFocused(ifPassword.GetComponent<RectTransform>(), 0.3f));
+        ifRePassword.onSelect.AddListener(_ => OnInputFocused(ifRePassword.GetComponent<RectTransform>(), 0.4f));
+
+        ifUsername.onDeselect.AddListener(_ => OnInputBlurred());
+        ifPassword.onDeselect.AddListener(_ => OnInputBlurred());
+        ifRePassword.onDeselect.AddListener(_ => OnInputBlurred());
+    }
+
+    private void OnInputFocused(RectTransform inputRect, float ratio)
+    {
+        _focusedInputRect = inputRect;
+        _keyboardVisible = true;
+
+        Vector2 screenPos = RectTransformUtility.WorldToScreenPoint(null, inputRect.position);
+        float targetScreenY = Screen.height * ratio;
+
+        if (screenPos.y < targetScreenY)
         {
-            ifPassword.ActivateInputField();
-        });
-        ifPassword.onSubmit.AddListener(_ =>
+            float offsetY = targetScreenY - screenPos.y;
+            targetPos = originPos + Vector2.up * offsetY;
+        }
+        else
         {
-            ifRePassword.ActivateInputField();
-        });
+            targetPos = originPos;
+        }
+    }
+
+    private void OnInputBlurred()
+    {
+        _keyboardVisible = false;
+        _focusedInputRect = null;
+        targetPos = originPos;
     }
 
     protected override void OnEnable()
@@ -59,56 +91,29 @@ public class Register : ScaleScreen
 
         visibleStableFrames = 0;
         hiddenStableFrames = 0;
+        _keyboardVisible = false;
+        _focusedInputRect = null;
 
         Invoke("DelayRegister", 1f);
-        tgEyePassword.isOn = true;
-        tgEyeRePassword.isOn = true;
+        // tgEyePassword.isOn = true;
+        // tgEyeRePassword.isOn = true;
+
+        tgEyePassword.isOn = false;
+        tgEyeRePassword.isOn = false;
+
+        ifPassword.contentType = TMP_InputField.ContentType.Standard;
+        ifRePassword.contentType = TMP_InputField.ContentType.Standard;
+        ifPassword.ForceLabelUpdate();
+        ifRePassword.ForceLabelUpdate();
     }
 
     void Update()
     {
 #if UNITY_ANDROID || UNITY_IOS
-        // ✅ Không xử lý khi đang chạy trong Editor/giả lập (dù build target Android/iOS)
         if (!Application.isMobilePlatform)
             return;
 
-        if (!TouchScreenKeyboard.isSupported)
-            return;
-
-        // ✅ Chỉ xử lý khi đang focus vào 1 trong 3 ô của form register
-        bool anyFocused = (ifUsername != null && ifUsername.isFocused)
-                       || (ifPassword != null && ifPassword.isFocused)
-                       || (ifRePassword != null && ifRePassword.isFocused);
-
-        // ✅ area.height ổn định hơn visible (visible hay nhấp nháy lúc mở)
-        float kbHeight = TouchScreenKeyboard.area.height;
-        bool keyboardShown = anyFocused && kbHeight > 0.01f;
-
-        if (keyboardShown)
-        {
-            visibleStableFrames++;
-            hiddenStableFrames = 0;
-
-            // Debounce: chỉ đẩy lên khi trạng thái "shown" ổn định vài frame
-            if (visibleStableFrames >= stableFramesRequired)
-            {
-                float offset = Screen.height * pushUpScreenRatio;
-                targetPos = originPos + Vector2.up * offset;
-            }
-        }
-        else
-        {
-            hiddenStableFrames++;
-            visibleStableFrames = 0;
-
-            // Debounce: chỉ kéo xuống khi trạng thái "hidden" ổn định vài frame
-            if (hiddenStableFrames >= stableFramesRequired)
-            {
-                targetPos = originPos;
-            }
-        }
-
-        // ✅ Di chuyển mượt để tránh nhảy giật
+        // Di chuyển mượt để tránh nhảy giật
         rootLogin.anchoredPosition = Vector2.Lerp(
             rootLogin.anchoredPosition,
             targetPos,
@@ -236,20 +241,19 @@ public class Register : ScaleScreen
         UnityEngine.Networking.UnityWebRequest www =
             AgentUnity.GetHttpPost(CMDApi.LINK_GATEWAY_REGISTER, re.GetJson());
 
-        // www.timeout = 10;
         yield return www.SendWebRequest();
 
         if (www.isNetworkError)
         {
             ShowLoadWait(false);
-            SetThongBao(www.error);
+            ThongBaoController.Instance.ShowThongBaoNhanh(www.error);
             AgentUnity.LogError(www.error);
             yield break;
         }
         else if (www.isHttpError)
         {
             ShowLoadWait(false);
-            SetThongBao(www.error);
+            ThongBaoController.Instance.ShowThongBaoNhanh(www.error);
             AgentUnity.LogError(www.error);
             yield break;
         }
@@ -261,12 +265,12 @@ public class Register : ScaleScreen
                 AgentUnity.SetString(KeyLocalSave.PP_USERNAME, userName);
                 AgentUnity.SetString(KeyLocalSave.PP_PASSWORD, passWord);
 
-                // SuperDialog.Instance.Toast.MakeToast(j.GetString(Key.MESSAGE), 0.8f);
+                ThongBaoController.Instance.ShowThongBaoNhanh("Đăng ký thành công!");
                 ClickLogin();
             }
             else
             {
-                SetThongBao(j.GetString(Key.MESSAGE));
+                ThongBaoController.Instance.ShowThongBaoNhanh(j.GetString(Key.MESSAGE));
             }
 
             ShowLoadWait(false);

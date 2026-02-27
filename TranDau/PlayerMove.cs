@@ -89,6 +89,9 @@ public class PlayerMove : MonoBehaviour
     [SerializeField] private bool useServerSkillVisuals = true;
     [SerializeField] private float waitServerAimTimeout = 0.8f;
 
+    [Header("Type 5 Dash")]
+    public float dashSpeedType5 = 1200f;
+
     public void OnServerSkillCast(TranDauControl.SkillCastInfo info)
     {
         Vector3 d = info.dir;
@@ -839,12 +842,39 @@ public class PlayerMove : MonoBehaviour
     private void ShowSkillByServerAim(SkillConfig cfg, TranDauControl.SkillCastInfo info)
     {
         if (cfg == null) return;
+        if (cfg.skillObject == null) return;
 
-        if (cfg.skillObject == null)
+        // ★ Dùng client config để check type 5, vì server có thể gửi typeSkill khác
+        int clientType = GetSkillTypeForSkillId(currentSkillIndex);
+        if (clientType == SkillCastProtocol33.TYPE_LINE_2)
         {
+            // Ưu tiên dir từ server nếu có, fallback sang info.dir
+            Vector3 dashDir = info.dir;
+            dashDir.y = 0f;
+            if (dashDir.sqrMagnitude < 0.0001f && info.hasTarget)
+            {
+                dashDir = info.targetPos - info.origin;
+                dashDir.y = 0f;
+            }
+            if (dashDir.sqrMagnitude < 0.0001f && controller != null)
+            {
+                dashDir = controller.transform.forward;
+                dashDir.y = 0f;
+            }
+            if (dashDir.sqrMagnitude > 0.0001f) dashDir.Normalize();
+
+            var dashInfo = info;
+            dashInfo.dir = dashDir;
+            dashInfo.typeSkill = SkillCastProtocol33.TYPE_LINE_2;
+            if (dashInfo.maxRange <= 0.01f)
+                dashInfo.maxRange = normalAttackConfig.attackRange;
+
+            if (_activeSkillMoveCo != null) StopCoroutine(_activeSkillMoveCo);
+            _activeSkillMoveCo = StartCoroutine(CoType5DashThenSpawn(cfg, dashInfo));
             return;
         }
 
+        // --- Giữ nguyên code cũ bên dưới ---
         ComputeServerVisual(info, out Vector3 origin, out Vector3 dst, out Vector3 dir, out Quaternion rot, out bool needMove);
 
         bool usesTarget = SkillCastProtocol33.UsesTargetPos(info.typeSkill);
@@ -907,12 +937,36 @@ public class PlayerMove : MonoBehaviour
     {
         if (cfg == null) return;
 
-        if (cfg.skillObject == null)
-        {
-            return;
-        }
+        if (cfg.skillObject == null) return;
 
         if (controller == null) return;
+
+        // ★ TYPE 5: Dash player đến đích, sau đó mới spawn skill
+        if (currentSkillCfg == cfg && GetSkillTypeForSkillId(currentSkillIndex) == SkillCastProtocol33.TYPE_LINE_2)
+        {
+            Vector3 dashDir = fallbackDir;
+            dashDir.y = 0f;
+            if (dashDir.sqrMagnitude < 0.0001f)
+            {
+                dashDir = controller.transform.forward;
+                dashDir.y = 0f;
+            }
+            if (dashDir.sqrMagnitude > 0.0001f) dashDir.Normalize();
+
+            var fakeInfo = new TranDauControl.SkillCastInfo
+            {
+                typeSkill = SkillCastProtocol33.TYPE_LINE_2,
+                origin = controller.transform.position,
+                dir = dashDir,
+                maxRange = normalAttackConfig.attackRange,
+                speed = moveSpeed,
+                hasTarget = false,
+            };
+
+            if (_activeSkillMoveCo != null) StopCoroutine(_activeSkillMoveCo);
+            _activeSkillMoveCo = StartCoroutine(CoType5DashThenSpawn(cfg, fakeInfo));
+            return;
+        }
 
         Vector3 dir = fallbackDir;
         dir.y = 0f;
@@ -1448,5 +1502,121 @@ public class PlayerMove : MonoBehaviour
     {
         var v = GetLowHpVignette();
         if (v != null) v.PulseDamageOnce();
+    }
+
+    // ─── TYPE 5: Player dash tới đích, rồi mới spawn skillObject ───────────────
+
+    private IEnumerator CoType5DashThenSpawn(SkillConfig cfg, TranDauControl.SkillCastInfo info)
+    {
+        if (controller == null || cfg == null) yield break;
+
+        Vector3 dir = info.dir;
+        dir.y = 0f;
+
+        if (dir.sqrMagnitude < 0.0001f)
+        {
+            dir = controller.transform.forward;
+            dir.y = 0f;
+        }
+        if (dir.sqrMagnitude > 0.0001f) dir.Normalize();
+
+        float range = info.maxRange > 0.01f ? info.maxRange : normalAttackConfig.attackRange;
+        Vector3 startPos = controller.transform.position;
+        Vector3 destination = new Vector3(
+            startPos.x + dir.x * range,
+            startPos.y,
+            startPos.z + dir.z * range
+        );
+
+        if (dir.sqrMagnitude > 0.0001f)
+            controller.transform.rotation = Quaternion.LookRotation(dir);
+
+        float speed = dashSpeedType5;
+        float timeout = (range / speed) * 3f + 1f; // tối đa gấp 3 lần thời gian lý thuyết
+        float elapsed = 0f;
+        Vector3 lastPos = startPos;
+        float stuckTimer = 0f;
+        const float STUCK_THRESHOLD = 0.05f; // nếu di chuyển < 0.05 unit/frame liên tục 0.3s → coi là stuck
+
+        while (controller != null && controller.enabled && controller.gameObject.activeInHierarchy)
+        {
+            elapsed += Time.deltaTime;
+
+            // Timeout an toàn
+            if (elapsed >= timeout) break;
+
+            Vector3 current = controller.transform.position;
+            float dist = Vector3.Distance(
+                new Vector3(current.x, 0f, current.z),
+                new Vector3(destination.x, 0f, destination.z)
+            );
+
+            if (dist <= 0.15f) break;
+
+            // Phát hiện stuck: không di chuyển được
+            float moved = Vector3.Distance(
+                new Vector3(current.x, 0f, current.z),
+                new Vector3(lastPos.x, 0f, lastPos.z)
+            );
+            if (moved < STUCK_THRESHOLD * Time.deltaTime * speed * 0.1f)
+            {
+                stuckTimer += Time.deltaTime;
+                if (stuckTimer >= 0.3f) break; // stuck 0.3s → thoát
+            }
+            else
+            {
+                stuckTimer = 0f;
+            }
+            lastPos = current;
+
+            Vector3 move = new Vector3(dir.x, 0f, dir.z) * speed * Time.deltaTime;
+
+            // Không vượt quá đích
+            if (move.magnitude > dist)
+                move = new Vector3(dir.x, 0f, dir.z) * dist;
+
+            // Gravity
+            if (controller.isGrounded)
+                velocity.y = -2f;
+            else
+                velocity.y += gravity * Time.deltaTime;
+
+            move.y = velocity.y * Time.deltaTime;
+
+            controller.Move(move);
+            yield return null;
+        }
+
+        // Snap tới đích
+        if (controller != null && controller.gameObject.activeInHierarchy)
+        {
+            Vector3 pos = controller.transform.position;
+            Vector3 snapDelta = new Vector3(
+                destination.x - pos.x,
+                0f,
+                destination.z - pos.z
+            );
+            if (snapDelta.sqrMagnitude > 0.0001f)
+                controller.Move(snapDelta);
+        }
+
+        // Spawn skillObject tại điểm cuối
+        if (cfg.skillObject != null)
+        {
+            cfg.skillObject.transform.position = destination;
+            cfg.skillObject.transform.rotation = (dir.sqrMagnitude > 0.0001f)
+                ? Quaternion.LookRotation(dir)
+                : controller.transform.rotation;
+            cfg.skillObject.SetActive(true);
+        }
+
+        // Reset combat state để joystick hoạt động lại
+        isSkillCasting = false;
+        animator.SetBool("isSkill1", false);
+        animator.SetBool("isSkill2", false);
+        animator.SetBool("isSkill3", false);
+        currentSkillCfg = null;
+        currentSkillIndex = 0;
+        UpdateMovementAnimation();
     }
 }

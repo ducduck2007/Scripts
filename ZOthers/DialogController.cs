@@ -176,4 +176,22 @@ public class DialogController : ManualSingleton<DialogController>
             return _dialogTrangBi;
         }
     }
+
+    private PopupGhepTran _popupGhepTran;
+    public PopupGhepTran PopupGhepTran
+    {
+        get
+        {
+            if (_popupGhepTran == null)
+            {
+                _popupGhepTran = AgentUnity.InstanceObject<PopupGhepTran>(Load(PathResource.PopupGhepTran), transform);
+            }
+            return _popupGhepTran;
+        }
+    }
+
+    public void ShowPopupGhepTran()
+    {
+        PopupGhepTran.Show();
+    }
 }

@@ -25,8 +25,40 @@ public class LoginSever : ScaleScreen
     [SerializeField] private float pushLerpSpeed = 12f;
     [SerializeField] private int stableFramesRequired = 3;
 
+    [Header("Prefab Type")]
+    [SerializeField] private bool isSocialFirstScreen = false;
     private int visibleStableFrames;
     private int hiddenStableFrames;
+    private bool _keyboardVisible = false;
+    private RectTransform _focusedInputRect;
+
+
+    private Coroutine _timeoutCoroutine;
+
+    private void StartLoginTimeout()
+    {
+        StopLoginTimeout();
+        _timeoutCoroutine = StartCoroutine(IELoginTimeout());
+    }
+
+    private void StopLoginTimeout()
+    {
+        if (_timeoutCoroutine != null)
+        {
+            StopCoroutine(_timeoutCoroutine);
+            _timeoutCoroutine = null;
+        }
+    }
+
+    private IEnumerator IELoginTimeout()
+    {
+        yield return new WaitForSeconds(3f);
+        if (!B.Instance.isConnectServerSuccess)
+        {
+            ShowLoadWait(false);
+            SetThongBao("Kết nối không thành công, vui lòng kiểm tra lại mạng hoặc liên hệ bộ phận kỹ thuật để được hỗ trợ!");
+        }
+    }
 
     protected override void OnEnable()
     {
@@ -60,35 +92,14 @@ public class LoginSever : ScaleScreen
         if (!Application.isMobilePlatform)
             return;
 
-        if (!TouchScreenKeyboard.isSupported)
-            return;
-
-        bool anyFocused = (inputUserName != null && inputUserName.isFocused)
-                       || (inputPassWord != null && inputPassWord.isFocused);
-
-        float kbHeight = TouchScreenKeyboard.area.height;
-        bool keyboardShown = anyFocused && kbHeight > 0.01f;
-
-        if (keyboardShown)
+        // Detect focus qua isFocused, chỉ gọi OnInputFocused 1 lần khi trạng thái thay đổi
+        if (inputUserName != null && inputUserName.isFocused && !_keyboardVisible)
         {
-            visibleStableFrames++;
-            hiddenStableFrames = 0;
-
-            if (visibleStableFrames >= stableFramesRequired)
-            {
-                float offset = Screen.height * pushUpScreenRatio;
-                targetPos = originPos + Vector2.up * offset;
-            }
+            OnInputFocused(inputUserName.GetComponent<RectTransform>(), 0.2f);
         }
-        else
+        else if (inputPassWord != null && inputPassWord.isFocused && !_keyboardVisible)
         {
-            hiddenStableFrames++;
-            visibleStableFrames = 0;
-
-            if (hiddenStableFrames >= stableFramesRequired)
-            {
-                targetPos = originPos;
-            }
+            OnInputFocused(inputPassWord.GetComponent<RectTransform>(), 0.3f);
         }
 
         rootLogin.anchoredPosition = Vector2.Lerp(
@@ -115,37 +126,68 @@ public class LoginSever : ScaleScreen
         btnRegister.onClick.AddListener(ClickRegister);
 
         if (buttonGoogleLogin != null)
-        {
             buttonGoogleLogin.onClick.AddListener(ClickGoogleLogin);
-        }
 
         if (buttonFacebookLogin != null)
-        {
             buttonFacebookLogin.onClick.AddListener(ClickFacebookLogin);
-        }
 
         tgLuuTaiKhoan.onValueChanged.AddListener((arg0 =>
         {
             AudioManager.Instance.AudioClick();
             if (tgLuuTaiKhoan.isOn)
-            {
                 AgentUnity.SetInt(KeyLocalSave.PP_SavePassword, 0);
-            }
             else
-            {
                 AgentUnity.SetInt(KeyLocalSave.PP_SavePassword, 1);
-            }
         }));
 
-        inputUserName.onSubmit.AddListener(_ =>
+        inputUserName.onSubmit.AddListener(_ => inputPassWord.ActivateInputField());
+
+        var rtUsername = inputUserName.GetComponent<RectTransform>();
+        var rtPassword = inputPassWord.GetComponent<RectTransform>();
+
+        inputUserName.onSubmit.AddListener(_ => inputPassWord.ActivateInputField());
+        inputUserName.onEndEdit.AddListener(_ => OnInputBlurred());
+        inputPassWord.onEndEdit.AddListener(_ => OnInputBlurred());
+
+        inputUserName.onEndEdit.AddListener(_ => OnInputBlurred());
+        inputPassWord.onEndEdit.AddListener(_ => OnInputBlurred());
+    }
+
+    private void OnInputFocused(RectTransform inputRect, float ratio)
+    {
+        _focusedInputRect = inputRect;
+        _keyboardVisible = true;
+
+        Vector2 screenPos = RectTransformUtility.WorldToScreenPoint(null, inputRect.position);
+        float targetScreenY = Screen.height * ratio;
+
+        if (screenPos.y < targetScreenY)
         {
-            inputPassWord.ActivateInputField();
-        });
+            float offsetY = targetScreenY - screenPos.y;
+            targetPos = originPos + Vector2.up * offsetY;
+        }
+        else
+        {
+            targetPos = originPos;
+        }
+    }
+
+    private void OnInputBlurred()
+    {
+        _keyboardVisible = false;
+        _focusedInputRect = null;
+        targetPos = originPos;
     }
 
     public void ClickLogin()
     {
         AudioManager.Instance.AudioClick();
+        if (isSocialFirstScreen)
+        {
+            LoginController.Instance.ShowNormalLogin();
+            return;
+        }
+
         B.Instance.UserName = inputUserName.text;
         B.Instance.PassWord = inputPassWord.text;
 
@@ -179,6 +221,7 @@ public class LoginSever : ScaleScreen
     private IEnumerator ProcessLogin(string userName, string passWord)
     {
         ShowLoadWait(true);
+        StartLoginTimeout();
 
         int cmd = CMDApi.API;
         ApiSend re = new ApiSend(cmd);
@@ -220,20 +263,23 @@ public class LoginSever : ScaleScreen
 
                 if (j.GetInt("status") == 1)
                 {
+                    StopLoginTimeout();
                     B.Instance.Keyhash = j.GetString("keyhash");
 
                     AgentUnity.SetString(KeyLocalSave.PP_USERNAME, userName);
                     AgentUnity.SetString(KeyLocalSave.PP_PASSWORD, passWord);
+                    AgentUnity.SetInt(KeyLocalSave.PP_LAST_LOGIN_TYPE, KeyLocalSave.LOGIN_TYPE_NORMAL);
 
                     Res.IP = j.GetString("server");
                     Res.PORT = j.GetInt("port");
 
-                    Debug.Log("✅ Gateway login successful! Now login game server...");
+                    Debug.Log("Gateway login successful! Now login game server...");
 
                     SendData.OnLoginGame();
                 }
                 else
                 {
+                    StopLoginTimeout();
                     SetThongBao(j.GetString(Key.MESSAGE));
                 }
             }
@@ -261,7 +307,7 @@ public class LoginSever : ScaleScreen
         if (Application.isEditor)
         {
             SetThongBao("Google Sign-In không hoạt động trong Unity Editor. Vui lòng build APK!");
-            Debug.LogWarning("⚠️ Google Sign-In không hoạt động trong Unity Editor!");
+            Debug.LogWarning("Google Sign-In không hoạt động trong Unity Editor!");
             return;
         }
 
@@ -279,7 +325,7 @@ public class LoginSever : ScaleScreen
     {
         try
         {
-            Debug.Log("🌐 Creating Google OAuth provider...");
+            Debug.Log("Creating Google OAuth provider...");
 
             var providerData = new Firebase.Auth.FederatedOAuthProviderData
             {
@@ -293,7 +339,7 @@ public class LoginSever : ScaleScreen
             if (result != null && result.User != null)
             {
                 string idToken = await result.User.TokenAsync(false);
-                StartCoroutine(ProcessFirebaseLogin(idToken));
+                StartCoroutine(ProcessFirebaseLogin(idToken, KeyLocalSave.LOGIN_TYPE_GOOGLE));
             }
             else
             {
@@ -393,7 +439,8 @@ public class LoginSever : ScaleScreen
                 }
 
                 FirebaseUser user = task.Result;
-                GetFirebaseTokenAndLogin(user);
+                // GetFirebaseTokenAndLogin(user);
+                GetFirebaseTokenAndLogin(user, KeyLocalSave.LOGIN_TYPE_FACEBOOK);
             });
         }
         else
@@ -402,7 +449,7 @@ public class LoginSever : ScaleScreen
         }
     }
 
-    private void GetFirebaseTokenAndLogin(FirebaseUser user)
+    private void GetFirebaseTokenAndLogin(FirebaseUser user, int loginType = 0)
     {
         user.TokenAsync(false).ContinueWithOnMainThread(task =>
         {
@@ -414,12 +461,14 @@ public class LoginSever : ScaleScreen
             }
 
             string idToken = task.Result;
-            StartCoroutine(ProcessFirebaseLogin(idToken));
+            // StartCoroutine(ProcessFirebaseLogin(idToken));
+            StartCoroutine(ProcessFirebaseLogin(idToken, loginType));
         });
     }
 
-    private IEnumerator ProcessFirebaseLogin(string idToken)
+    private IEnumerator ProcessFirebaseLogin(string idToken, int loginType = 0)
     {
+        StartLoginTimeout();
         int cmd = CMDApi.API;
         ApiSend re = new ApiSend(cmd);
 
@@ -452,10 +501,12 @@ public class LoginSever : ScaleScreen
 
             if (j.GetInt("status") == 1)
             {
+                StopLoginTimeout();
                 B.Instance.Keyhash = j.GetString("keyhash");
                 B.Instance.UserName = j.GetString("userName");
+                AgentUnity.SetInt(KeyLocalSave.PP_LAST_LOGIN_TYPE, loginType);
 
-                Debug.Log($"✅ Firebase gateway login OK - Username: {B.Instance.UserName}");
+                Debug.Log($"Firebase gateway login OK - Username: {B.Instance.UserName}");
 
                 Res.IP = j.GetString("server");
                 Res.PORT = j.GetInt("port");
@@ -464,6 +515,7 @@ public class LoginSever : ScaleScreen
             }
             else
             {
+                StopLoginTimeout();
                 SetThongBao(j.GetString(Key.MESSAGE));
             }
         }

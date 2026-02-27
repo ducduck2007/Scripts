@@ -52,4 +52,6 @@ public class PathResource
 
     public const string LoiMoiVaoParty = "Party/LoiMoiVaoParty";
     public const string PopupPartyMatchFound = "Party/PopupPartyMatchFound";
+    public const string PopupGhepTran = "MainGame/GhepTran";
+
 }

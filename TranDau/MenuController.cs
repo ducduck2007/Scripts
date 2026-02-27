@@ -110,6 +110,20 @@ public class MenuController : ScaleScreen
 
     private bool _prewarmed = false;
 
+    [Header("Ping UI")]
+    public TextMeshProUGUI txtPing;
+    public Image iconPing;
+
+    public Sprite pingWeakSprite;
+    public Sprite pingMidSprite;
+    public Sprite pingGoodSprite;
+
+    [SerializeField] private float pingWeakPosX = -188f;
+    [SerializeField] private float pingMidPosX = -178f;
+    [SerializeField] private float pingGoodPosX = -170f;
+
+    private int _lastPingState = -1; // 0=weak,1=mid,2=good
+
     protected override void OnEnable()
     {
         base.OnEnable();
@@ -215,6 +229,7 @@ public class MenuController : ScaleScreen
 
         UpdateGameTimeUI();
         UpdateScoreUI();
+        UpdatePingUI();
     }
 
     private void InitChatPanelState()
@@ -1005,5 +1020,55 @@ public class MenuController : ScaleScreen
         if (pm == null) return;
 
         pm.DisableAllAimCanvases();
+    }
+
+    private void UpdatePingUI()
+    {
+        if (txtPing == null) return;
+        if (PingPongGame.Instance == null) return;
+
+        int ms = (int)PingPongGame.Instance.pingTime;
+        txtPing.text = ms + "ms";
+
+        int state; // 0=weak,1=mid,2=good
+        if (ms < 50)
+        {
+            state = 2;
+            txtPing.color = Color.green;
+        }
+        else if (ms <= 120)
+        {
+            state = 1;
+            txtPing.color = Color.yellow;
+        }
+        else
+        {
+            state = 0;
+            txtPing.color = Color.red;
+        }
+
+        // chỉ cập nhật icon/pos khi state đổi
+        if (state == _lastPingState) return;
+        _lastPingState = state;
+
+        if (iconPing == null) return;
+
+        // đổi sprite + posX theo state
+        Sprite sp = null;
+        float x = 0f;
+
+        switch (state)
+        {
+            case 0: sp = pingWeakSprite; x = pingWeakPosX; break;
+            case 1: sp = pingMidSprite; x = pingMidPosX; break;
+            default: sp = pingGoodSprite; x = pingGoodPosX; break;
+        }
+
+        if (sp != null) iconPing.sprite = sp;
+
+        var rt = iconPing.rectTransform;
+        var p = rt.anchoredPosition;
+        p.x = x;
+        rt.anchoredPosition = p;
     }
 }

@@ -11,6 +11,7 @@ public class MainGame1 : ScaleScreen
     public Button btnBanBe, btnSanh, btnShop, btnTuiDo, btnTuong, btnTrangBi, btnNhiemVu, btnChat;
     public Button btnAddTien, btnGifiCode, btnThu, btnSetting;
     public Button btnNapDau, btnDangNhap, btnSuKien, btnSkDb;
+    public TextMeshProUGUI txtPing;
 
     protected override void Start()
     {
@@ -37,6 +38,21 @@ public class MainGame1 : ScaleScreen
         btnChat.onClick.AddListener(() => { StopLoginFx(); ClickChat(); });
 
         ItemInfoCache.EnsureDiskLoaded(debugLog: false);
+    }
+
+    void Update()
+    {
+        if (PingPongGame.Instance == null) return;
+
+        int ms = (int)PingPongGame.Instance.pingTime;
+        txtPing.text = ms + "ms";
+
+        if (ms < 50)
+            txtPing.color = Color.green;
+        else if (ms <= 120)
+            txtPing.color = Color.yellow;
+        else
+            txtPing.color = Color.red;
     }
 
     // ==== STOP FX LOGIN ====
