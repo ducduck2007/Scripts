@@ -6,6 +6,9 @@ public class SceneTransititon : MonoBehaviour
     public static SceneTransititon Instance;
 
     public Animator transition;
+    public float fadeTime = 1f;
+
+    private bool isLoading = false;
 
     private void Awake()
     {
@@ -22,17 +25,24 @@ public class SceneTransititon : MonoBehaviour
 
     public void LoadNextScene(string sceneName)
     {
+        if (isLoading) return;
         StartCoroutine(LoadScene(sceneName));
     }
 
     IEnumerator LoadScene(string sceneName)
     {
-        transition.SetTrigger("StartFade");
+    if (isLoading) yield break;
+    isLoading = true;
 
-        yield return new WaitForSeconds(1f);
+    transition.SetTrigger("StartFade");
 
-        ThongBaoController.Instance.LoadVaoTran.SetLoadScene(sceneName);
+    yield return new WaitForSeconds(fadeTime);
 
-        transition.SetTrigger("EndFade");
+
+    ThongBaoController.Instance.LoadVaoTran.SetLoadScene(sceneName);
+
+    transition.SetTrigger("EndFade");
+
+    isLoading = false;
     }
 }

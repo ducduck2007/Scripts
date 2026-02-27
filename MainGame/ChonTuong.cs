@@ -28,7 +28,7 @@ public class ChonTuong : ScaleScreen
 
     Coroutine _bgCo;
 
-    static readonly Color DARK_COLOR = new Color32(34, 34, 34, 255);
+    static readonly Color DARK_COLOR = new Color32(0, 0, 0, 255);
     static readonly Color NORMAL_COLOR = new Color32(255, 255, 255, 255);
 
     protected override void Start()

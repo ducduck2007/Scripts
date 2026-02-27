@@ -12,6 +12,17 @@ public class MainGame1 : ScaleScreen
     public Button btnAddTien, btnGifiCode, btnThu, btnSetting;
     public Button btnNapDau, btnDangNhap, btnSuKien, btnSkDb;
     public TextMeshProUGUI txtPing;
+    public Image iconPing;
+
+    public Sprite pingWeakSprite;
+    public Sprite pingMidSprite;
+    public Sprite pingGoodSprite;
+
+    [SerializeField] private float pingWeakPosX = -93.5f;
+    [SerializeField] private float pingMidPosX = -87.5f;
+    [SerializeField] private float pingGoodPosX = -82f;
+
+    private int _lastPingState = -1; // 0=weak, 1=mid, 2=good
 
     protected override void Start()
     {
@@ -45,14 +56,45 @@ public class MainGame1 : ScaleScreen
         if (PingPongGame.Instance == null) return;
 
         int ms = (int)PingPongGame.Instance.pingTime;
-        txtPing.text = ms + "ms";
+        if (txtPing != null) txtPing.text = ms + "ms";
 
+        int state; // 0=weak,1=mid,2=good
         if (ms < 50)
-            txtPing.color = Color.green;
+        {
+            state = 2;
+            if (txtPing != null) txtPing.color = Color.green;
+        }
         else if (ms <= 120)
-            txtPing.color = Color.yellow;
+        {
+            state = 1;
+            if (txtPing != null) txtPing.color = Color.yellow;
+        }
         else
-            txtPing.color = Color.red;
+        {
+            state = 0;
+            if (txtPing != null) txtPing.color = Color.red;
+        }
+
+        if (state == _lastPingState) return;
+        _lastPingState = state;
+
+        if (iconPing == null) return;
+
+        Sprite sp;
+        float x;
+        switch (state)
+        {
+            case 0: sp = pingWeakSprite; x = pingWeakPosX; break;
+            case 1: sp = pingMidSprite; x = pingMidPosX; break;
+            default: sp = pingGoodSprite; x = pingGoodPosX; break;
+        }
+
+        if (sp != null) iconPing.sprite = sp;
+
+        var rt = iconPing.rectTransform;
+        var p = rt.anchoredPosition;
+        p.x = x;
+        rt.anchoredPosition = p;
     }
 
     // ==== STOP FX LOGIN ====
