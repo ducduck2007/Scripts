@@ -35,6 +35,8 @@ public class SwipeRotateCharacter : MonoBehaviour
     void OnEnable()
     {
         if (target == null) target = transform;
+
+        // Khi object vừa bật: lấy rotation hiện tại làm base
         _baseRot = target.localRotation;
         _yaw = 0f;
         _yawVel = 0f;
@@ -84,7 +86,12 @@ public class SwipeRotateCharacter : MonoBehaviour
 
         if (springBack && !_dragging)
         {
-            _yaw = Mathf.SmoothDamp(_yaw, 0f, ref _yawVel, 1f / Mathf.Max(1f, springSpeed), Mathf.Infinity, Time.unscaledDeltaTime);
+            _yaw = Mathf.SmoothDamp(
+                _yaw, 0f, ref _yawVel,
+                1f / Mathf.Max(1f, springSpeed),
+                Mathf.Infinity,
+                Time.unscaledDeltaTime
+            );
             ApplyYaw();
         }
     }
@@ -97,7 +104,6 @@ public class SwipeRotateCharacter : MonoBehaviour
         _yaw = Mathf.Clamp(_yaw, -yawMax, yawMax);
 
         ApplyYaw();
-
         _lastPos = pos;
     }
 
@@ -110,6 +116,16 @@ public class SwipeRotateCharacter : MonoBehaviour
     public void ResetRotation()
     {
         if (target == null) return;
+        _yaw = 0f;
+        _yawVel = 0f;
+        target.localRotation = _baseRot;
+    }
+
+    // ✅ Dùng hàm này (duy nhất) để rebase theo pose hiện tại
+    public void RebaseToCurrent()
+    {
+        if (target == null) target = transform;
+        _baseRot = target.localRotation;
         _yaw = 0f;
         _yawVel = 0f;
         target.localRotation = _baseRot;

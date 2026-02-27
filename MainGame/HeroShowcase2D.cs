@@ -28,11 +28,16 @@ public class HeroShowcase2D : MonoBehaviour
     {
         if (target == null || profile == null) return;
 
+        // Stop sequence cũ
         if (_co != null) { StopCoroutine(_co); _co = null; }
 
+        // Trả lại swipe của hero cũ (nếu đang tắt)
+        if (_target != null)
+            SetSwipe(_target, true);
+
+        // Reset animator + pose hero cũ
         if (_target != null && _profile != null)
         {
-            // Reset animator hero cũ
             var oldAnim = _target.GetComponentInChildren<Animator>(true);
             if (oldAnim != null) oldAnim.speed = 1f;
 
@@ -50,14 +55,18 @@ public class HeroShowcase2D : MonoBehaviour
         if (setIdleFalseOnStart)
             SetIdle(_target, false);
 
+        // Apply default pose trước
         ApplyPose(_target, _profile.defaultPose);
+
+        // ✅ FIX DỨT ĐIỂM:
+        // Trong lúc showcase chạy LerpPose, tắt SwipeRotateCharacter để không tranh quyền set localRotation
+        SetSwipe(_target, false);
 
         _co = StartCoroutine(CoRunOnce());
     }
 
     IEnumerator CoRunOnce()
     {
-        Debug.Log("[CoRunOnce] Bắt đầu chạy");
         if (_target == null || _profile == null) yield break;
 
         if (_profile.enterDelay > 0f)
@@ -71,18 +80,12 @@ public class HeroShowcase2D : MonoBehaviour
 
             Coroutine autoPauseCo = null;
             if (autoPauseEnabled && pauseAtTime >= 0f)
-            {
-                Debug.Log($"[CoRunOnce] Khởi động CoAutoPause với pauseAtTime={pauseAtTime}");
                 autoPauseCo = StartCoroutine(CoAutoPause(pauseAtTime));
-            }
-            else
-            {
-                Debug.Log($"[CoRunOnce] autoPauseEnabled={autoPauseEnabled}, pauseAtTime={pauseAtTime} → KHÔNG chạy CoAutoPause");
-            }
 
             for (int i = 0; i < _profile.steps.Length; i++)
             {
                 if (_target == null) yield break;
+
                 var s = _profile.steps[i];
                 float waitTime = s.atTime - elapsed;
                 if (waitTime > 0f)
@@ -90,13 +93,11 @@ public class HeroShowcase2D : MonoBehaviour
                     elapsed += waitTime;
                     yield return WaitRealtime(waitTime);
                 }
-                Debug.Log($"[CoRunOnce] Step {i} hoàn thành, elapsed={elapsed}, _paused={_paused}");
+
                 yield return LerpPose(prev, s.pose, Mathf.Max(0f, s.lerpTime));
                 elapsed += Mathf.Max(0f, s.lerpTime);
                 prev = s.pose;
             }
-
-            Debug.Log($"[CoRunOnce] Tất cả steps xong, elapsed={elapsed}, _paused={_paused}");
 
             float waitToReturn = _profile.returnAtTime - elapsed;
             if (waitToReturn > 0f)
@@ -107,39 +108,24 @@ public class HeroShowcase2D : MonoBehaviour
             if (autoPauseCo != null) StopCoroutine(autoPauseCo);
         }
 
-        Debug.Log("[CoRunOnce] Kết thúc, chuyển sang Idle");
-
         if (setIdleTrueWhenDone)
             yield return TransitionToIdle(_target);
+
+        // ✅ Bật lại swipe sau khi showcase kết thúc + rebase theo rotation hiện tại
+        SetSwipe(_target, true);
 
         _co = null;
     }
 
     IEnumerator CoAutoPause(float pauseAt)
     {
-        Debug.Log($"[AutoPause] Bắt đầu đếm, sẽ pause tại: {pauseAt}s");
         yield return new WaitForSecondsRealtime(pauseAt);
-
-        Debug.Log($"[AutoPause] Đã đến {pauseAt}s → set _paused = true");
         _paused = true;
 
         if (_target != null)
         {
             var anim = _target.GetComponentInChildren<Animator>(true);
-            if (anim != null)
-            {
-                Debug.Log($"[AutoPause] Tìm thấy Animator: {anim.gameObject.name}, speed hiện tại: {anim.speed} → set về 0");
-                anim.speed = 0f;
-                Debug.Log($"[AutoPause] Animator speed sau khi set: {anim.speed}");
-            }
-            else
-            {
-                Debug.LogWarning("[AutoPause] KHÔNG tìm thấy Animator trong _target!");
-            }
-        }
-        else
-        {
-            Debug.LogWarning("[AutoPause] _target là NULL!");
+            if (anim != null) anim.speed = 0f;
         }
     }
 
@@ -215,4 +201,21 @@ public class HeroShowcase2D : MonoBehaviour
     }
 
     static float Smooth(float x) { x = Mathf.Clamp01(x); return x * x * (3f - 2f * x); }
+
+    SwipeRotateCharacter FindSwipe(Transform t)
+    {
+        if (t == null) return null;
+        return t.GetComponentInChildren<SwipeRotateCharacter>(true);
+    }
+
+    void SetSwipe(Transform t, bool enabled)
+    {
+        var s = FindSwipe(t);
+        if (s == null) return;
+
+        s.enabled = enabled;
+
+        if (enabled)
+            s.RebaseToCurrent();
+    }
 }

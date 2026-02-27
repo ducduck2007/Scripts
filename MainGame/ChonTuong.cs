@@ -100,34 +100,42 @@ public class ChonTuong : ScaleScreen
 
         int heroIndex = selectedHeroType - 1;
 
-        if (tuong != null)
+        // Safety check
+        if (tuong == null || tuong.Length == 0) return;
+        if (heroIndex < 0 || heroIndex >= tuong.Length) return;
+
+        // Bật đúng hero
+        for (int i = 0; i < tuong.Length; i++)
         {
-            for (int i = 0; i < tuong.Length; i++)
-            {
-                if (tuong[i])
-                    tuong[i].SetActive(i == heroIndex);
-            }
+            if (tuong[i])
+                tuong[i].SetActive(i == heroIndex);
         }
 
+        // Showcase animation
         if (showcase2D != null &&
             showcaseProfiles != null &&
             heroIndex >= 0 &&
             heroIndex < showcaseProfiles.Length)
         {
-            showcase2D.PlayFor(
-                tuong[heroIndex].transform,
-                showcaseProfiles[heroIndex]
-            );
+            if (tuong[heroIndex] != null)
+            {
+                showcase2D.PlayFor(
+                    tuong[heroIndex].transform,
+                    showcaseProfiles[heroIndex]
+                );
+            }
         }
 
         HandleBgColor(heroIndex);
 
+        // Avatar sprite
         if (imgTuongChon && sprAvtTuong != null &&
             heroIndex >= 0 && heroIndex < sprAvtTuong.Length)
         {
             imgTuongChon.sprite = sprAvtTuong[heroIndex];
         }
 
+        // Hero name
         string heroName = B.Instance.GetNameTuong(selectedHeroType);
         if (txtTenTuong) txtTenTuong.text = heroName;
         if (txtTenTuong2) txtTenTuong2.text = heroName;
