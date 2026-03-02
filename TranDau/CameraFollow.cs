@@ -278,4 +278,25 @@ public class CameraFollow : MonoBehaviour
         Gizmos.color = Color.red;
         Gizmos.DrawLine(new Vector3(-200, 0, botLaneZ), new Vector3(200, 0, botLaneZ));
     }
+
+    public void SnapToGameplayPosition(Vector3 focusPos)
+    {
+        // ✅ hủy intro nếu đang chạy
+        _isPlayingIntro = false;
+
+        // ✅ follow ngay
+        isFollow = true;
+
+        // set rotation theo lane default (giống SetTarget)
+        transform.rotation = Quaternion.Euler(midLaneRotationX, baseRotationY, baseRotationZ);
+        currentDynamicRotationX = midLaneRotationX;
+
+        // tính đúng vị trí camera gameplay theo offset hiện tại
+        Vector3 desiredPos = focusPos
+                             + transform.right * offset.x
+                             + Vector3.up * offset.y
+                             + transform.forward * offset.z;
+
+        transform.position = desiredPos;
+    }
 }

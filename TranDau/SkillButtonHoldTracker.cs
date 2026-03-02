@@ -4,9 +4,9 @@ using UnityEngine.EventSystems;
 
 public class SkillButtonHoldTracker : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 {
-    public float threshold = 0.25f;
+    public float threshold = 0.2f;
     public int skillIndex = 0;
-    public float previewDelay = 0.25f;
+    public float previewDelay = 0.2f;
 
     private Coroutine _coPreview;
     private bool _aimShown;       // canvas đang hiện

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -42,13 +43,23 @@ public class ChonTuong : ScaleScreen
         public Vector3 position;
         public Vector3 rotation;
         public Vector3 scale = Vector3.one;
+        public string layer = "camLayer3D";
+        public float delayShow = 0f;
+        public float destroyAfter = 0f;
+    }
+
+    [System.Serializable]
+    public class HeroHieuUngGroup
+    {
+        public HieuUngConfig[] configs;
     }
 
     [Header("Hieu Ung")]
-    public HieuUngConfig[] hieuUngConfigs;
-    public Transform hieuUngParent; // để trống thì spawn ở root scene
+    public HeroHieuUngGroup[] heroHieuUngs;
+    public Transform hieuUngParent;
 
-    private GameObject _currentHieuUng;
+    private List<GameObject> _currentHieuUngs = new List<GameObject>();
+    private List<Coroutine> _hieuUngCos = new List<Coroutine>();
 
     protected override void Start()
     {
@@ -80,11 +91,17 @@ public class ChonTuong : ScaleScreen
         if (canvasShowHieuUngUI != null)
             canvasShowHieuUngUI.gameObject.SetActive(false);
 
-        if (_currentHieuUng != null)
+        foreach (var co in _hieuUngCos)
         {
-            Destroy(_currentHieuUng);
-            _currentHieuUng = null;
+            if (co != null) StopCoroutine(co);
         }
+        _hieuUngCos.Clear();
+
+        foreach (var go in _currentHieuUngs)
+        {
+            if (go != null) Destroy(go);
+        }
+        _currentHieuUngs.Clear();
 
         Debug.Log($"[ChonTuong] OnDisable called! _daDemNguoc={_daDemNguoc}, stackTrace={System.Environment.StackTrace}");
     }
@@ -183,24 +200,84 @@ public class ChonTuong : ScaleScreen
 
     private void SpawnHieuUng(int heroIndex)
     {
-        // Hủy hiệu ứng cũ
-        if (_currentHieuUng != null)
+        // Hủy coroutine cũ
+        foreach (var co in _hieuUngCos)
         {
-            Destroy(_currentHieuUng);
-            _currentHieuUng = null;
+            if (co != null) StopCoroutine(co);
+        }
+        _hieuUngCos.Clear();
+
+        // Hủy hiệu ứng cũ
+        foreach (var go in _currentHieuUngs)
+        {
+            if (go != null) Destroy(go);
+        }
+        _currentHieuUngs.Clear();
+
+        if (heroHieuUngs == null || heroIndex < 0 || heroIndex >= heroHieuUngs.Length)
+            return;
+
+        HeroHieuUngGroup group = heroHieuUngs[heroIndex];
+        if (group == null || group.configs == null)
+            return;
+
+        foreach (var config in group.configs)
+        {
+            if (config == null || config.prefab == null)
+                continue;
+
+            var co = StartCoroutine(CoSpawnHieuUng(config));
+            _hieuUngCos.Add(co);
+        }
+    }
+
+    private IEnumerator CoSpawnHieuUng(HieuUngConfig config)
+    {
+        if (config.delayShow > 0f)
+            yield return new WaitForSeconds(config.delayShow);
+
+        if (!gameObject.activeInHierarchy)
+            yield break;
+
+        if (canvasShowHieuUngUI != null)
+            canvasShowHieuUngUI.gameObject.SetActive(true);
+
+        GameObject go = Instantiate(config.prefab, hieuUngParent);
+        go.transform.localPosition = config.position;
+        go.transform.localEulerAngles = config.rotation;
+        go.transform.localScale = config.scale;
+
+        if (!string.IsNullOrEmpty(config.layer))
+        {
+            int layerId = LayerMask.NameToLayer(config.layer);
+            if (layerId >= 0)
+                SetLayerRecursive(go, layerId);
+            else
+                Debug.LogWarning($"[ChonTuong] Layer '{config.layer}' không tồn tại!");
         }
 
-        if (hieuUngConfigs == null || heroIndex < 0 || heroIndex >= hieuUngConfigs.Length)
-            return;
+        _currentHieuUngs.Add(go);
 
-        HieuUngConfig config = hieuUngConfigs[heroIndex];
-        if (config == null || config.prefab == null)
-            return;
+        if (config.destroyAfter > 0f)
+        {
+            yield return new WaitForSeconds(config.destroyAfter);
+            if (go != null)
+            {
+                _currentHieuUngs.Remove(go);
+                Destroy(go);
+            }
 
-        _currentHieuUng = Instantiate(config.prefab, hieuUngParent);
-        _currentHieuUng.transform.localPosition = config.position;
-        _currentHieuUng.transform.localEulerAngles = config.rotation;
-        _currentHieuUng.transform.localScale = config.scale;
+            // Tắt canvas nếu không còn hiệu ứng nào
+            if (_currentHieuUngs.Count == 0 && canvasShowHieuUngUI != null)
+                canvasShowHieuUngUI.gameObject.SetActive(false);
+        }
+    }
+
+    private void SetLayerRecursive(GameObject go, int layer)
+    {
+        go.layer = layer;
+        foreach (Transform child in go.transform)
+            SetLayerRecursive(child.gameObject, layer);
     }
 
     void HandleBgColor(int heroIndex)

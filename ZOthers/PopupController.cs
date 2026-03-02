@@ -95,11 +95,5 @@ public class PopupController : ManualSingleton<PopupController>
 
         _chonTuong.canvasShowHieuUngUI = canvasShowHieuUngUI;
         _chonTuong.Show(true);
-
-        // Bật canvas SAU khi Show vì AgentUnity.InstanceObject trigger OnEnable ngay khi tạo
-        if (canvasShowHieuUngUI != null)
-            canvasShowHieuUngUI.gameObject.SetActive(true);
-        else
-            Debug.LogWarning("[PopupController] canvasShowHieuUngUI là NULL!");
     }
 }

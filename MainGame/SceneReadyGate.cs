@@ -40,10 +40,12 @@ public static class SceneReadyGate
 
     private static void TryActivate()
     {
+        Debug.Log($"[SceneReadyGate] TryActivate sceneReady={_sceneReady} gameStart={_gameStartReceived} pendingOp={(_pendingOp != null)}");
         if (!_sceneReady || !_gameStartReceived) return;
         if (_pendingOp == null) return;
 
         _pendingOp.allowSceneActivation = true;
         _pendingOp = null;
+        Debug.Log("[SceneReadyGate] allowSceneActivation = true");
     }
 }

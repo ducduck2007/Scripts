@@ -30,7 +30,7 @@ public class MenuController : ScaleScreen
     private Coroutine _chatAutoHideCo;
     private Coroutine _focusChatCo;
 
-    public Button btnDanhThuong, btnShowItem, btnSendMsTeam, btnSendMsAll;
+    public Button btnDanhThuong, btnShowItem, btnSendMsTeam, btnSendMsAll, btnExit;
 
     [Serializable]
     public class SkillUI
@@ -124,6 +124,9 @@ public class MenuController : ScaleScreen
 
     private int _lastPingState = -1; // 0=weak,1=mid,2=good
 
+    private bool _surrenderSent = false;
+    private bool _exitPopupShowing = false;
+
     protected override void OnEnable()
     {
         base.OnEnable();
@@ -180,7 +183,6 @@ public class MenuController : ScaleScreen
         var t2 = EnsureHoldTracker(skill2.btnCast); if (t2 != null) t2.skillIndex = 2;
         var t3 = EnsureHoldTracker(skill3.btnCast); if (t3 != null) t3.skillIndex = 3;
 
-
         if (skill1.btnPlusLevel != null) skill1.btnPlusLevel.onClick.AddListener(() => OnClickPlus(1));
         if (skill2.btnPlusLevel != null) skill2.btnPlusLevel.onClick.AddListener(() => OnClickPlus(2));
         if (skill3.btnPlusLevel != null) skill3.btnPlusLevel.onClick.AddListener(() => OnClickPlus(3));
@@ -202,6 +204,10 @@ public class MenuController : ScaleScreen
 
         if (iconChat != null)
             iconChat.onClick.AddListener(ToggleChatPanel);
+
+        // ✅ EXIT => SURRENDER
+        if (btnExit != null)
+            btnExit.onClick.AddListener(OnClickExit);
 
         SetPlusButtonsVisible(false, false, false);
         RefreshSkillCastLockOverlays();
@@ -978,8 +984,8 @@ public class MenuController : ScaleScreen
         var tr = go.GetComponent<SkillButtonHoldTracker>();
         if (tr == null) tr = go.AddComponent<SkillButtonHoldTracker>();
 
-        tr.threshold = 0.5f;
-        tr.previewDelay = 0.5f; // đồng bộ yêu cầu
+        // tr.threshold = 0.2f;
+        // tr.previewDelay = 0.2f;
 
         return tr;
     }
@@ -1070,5 +1076,43 @@ public class MenuController : ScaleScreen
         var p = rt.anchoredPosition;
         p.x = x;
         rt.anchoredPosition = p;
+    }
+
+    private void OnClickExit()
+    {
+        if (_surrenderSent) return;
+        if (_exitPopupShowing) return;
+
+        AudioManager.Instance?.AudioClick();
+
+        var tb = ThongBaoController.Instance;
+        if (tb == null || tb.PopupTwoButton == null)
+        {
+            // fallback: không có popup thì vẫn surrender
+            _surrenderSent = true;
+            SendData.SendSurrender();
+            return;
+        }
+
+        _exitPopupShowing = true;
+
+        tb.PopupTwoButton.ShowPopupTwoButton(
+            title: "Đầu hàng",
+            content: "Bạn có chắc muốn đầu hàng không?",
+            txtBtnExit: "Hủy",
+            actionOk: () =>
+            {
+                if (_surrenderSent) return;
+                _surrenderSent = true;
+                _exitPopupShowing = false;
+
+                SendData.SendSurrender();
+            },
+            actionExit: () =>
+            {
+                _exitPopupShowing = false;
+                // không làm gì thêm
+            }
+        );
     }
 }

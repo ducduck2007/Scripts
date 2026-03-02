@@ -37,6 +37,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
     private readonly Dictionary<int, JungleMonster> _activeMonstersById = new Dictionary<int, JungleMonster>(32);
     private readonly Dictionary<int, MonsterPrefabEntry> _monsterPrefabMap = new Dictionary<int, MonsterPrefabEntry>(32);
     private bool _monsterPrefabMapBuilt = false;
+    private bool _skipIntroThisPlay;
 
     private struct PendingMonsterState
     {
@@ -306,6 +307,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
         _localSetupDone = false;
         WaitingForServer = true;
+        _skipIntroThisPlay = B.Instance.ConsumeSkipIntroOnNextPlay();
 
         _activeMonstersById.Clear();
         _pendingMonsterState.Clear();
@@ -355,8 +357,53 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         while (WaitingForServer)
             yield return null;
 
+        if (_skipIntroThisPlay)
+        {
+            // ✅ reconnect: vào là chiến luôn
+            RevealImmediateNoIntro();
+            MatchStartGate.TryHideLoading();
+            yield break;
+        }
+
         StartCoroutine(CoSpawnEffectThenReveal());
         MatchStartGate.TryHideLoading();
+    }
+
+    private void RevealImmediateNoIntro()
+    {
+        var pm = playerMove;
+        if (pm == null) return;
+
+        if (GameTimerManager.Instance != null)
+            GameTimerManager.Instance.StartTimer();
+
+        // ✅ đặt vị trí đúng theo B.Instance trước
+        pm.SetPotion();
+
+        Vector3 pos = (pm.controller != null)
+            ? pm.controller.transform.position
+            : new Vector3(B.Instance.PosX, 0f, B.Instance.PosZ);
+
+        // ✅ camera follow ngay, không intro
+        if (cameraF != null)
+        {
+            cameraF.SetTarget(pm.transform);
+            cameraF.SnapToGameplayPosition(pos);
+        }
+
+        // ✅ bật nhân vật + mở input ngay
+        pm.gameObject.SetActive(true);
+
+        if (pm.controller != null)
+            pm.controller.enabled = true;
+
+        pm.isInputLocked = false;
+
+        if (pm.HealthBar != null)
+            pm.HealthBar.gameObject.SetActive(true);
+
+        // (tuỳ chọn) nếu bạn muốn vẫn có hiệu ứng spawn nhẹ khi reconnect thì mở dòng dưới
+        // if (spawnEffectPrefab != null) Destroy(Instantiate(spawnEffectPrefab, pos, Quaternion.identity), 0.6f);
     }
 
     private void Update()

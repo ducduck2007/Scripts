@@ -42,6 +42,7 @@ public class MiniMapFollow2D : MonoBehaviour
     public Color towerTeam1Color = new Color(0.2f, 0.5f, 1f, 1f);
     public Color towerTeam2Color = new Color(1f, 0.2f, 0.2f, 1f);
     public Vector2 towerIconSize = new Vector2(14f, 14f);
+    public Sprite towerIconSprite;
     public RectTransform towerIconPrefab;
     public RectTransform towersRoot;
     public Transform[] team1Towers = new Transform[10];
@@ -54,6 +55,17 @@ public class MiniMapFollow2D : MonoBehaviour
     public RectTransform jungleIconPrefab;
     public RectTransform jungleRoot;
     public Transform[] jungleMonsters = new Transform[10];
+
+    // ─── THÊM các field mới vào class MiniMapFollow2D ───────────────────────────
+
+    [Header("Avatar Border")]
+    public Sprite circleSprite; // kéo sprite hình tròn vào đây (UI Circle / Knob)
+    public Vector2 avatarIconSize = new Vector2(20f, 20f);
+    public Vector2 borderSize = new Vector2(26f, 26f);
+
+    public Color localPlayerBorderColor = new Color(0.1f, 0.9f, 0.1f, 1f);   // xanh lá
+    public Color teammatesBorderColor = new Color(0.2f, 0.5f, 1f, 1f);     // xanh dương
+    public Color enemyBorderColor = new Color(1f, 0.15f, 0.15f, 1f);   // đỏ
 
     private int _lastHeroType = -1;
 
@@ -80,12 +92,21 @@ public class MiniMapFollow2D : MonoBehaviour
         if (!teammatesRoot) teammatesRoot = miniMapRect;
         if (!towersRoot) towersRoot = miniMapRect;
         if (!jungleRoot) jungleRoot = miniMapRect;
+
+        // Viền xanh lá cho local player
+        if (playerIcon)
+            SetupBorderIcon(playerIcon, playerIconImage ? playerIconImage.sprite : null,
+                            localPlayerBorderColor, avatarIconSize, borderSize);
     }
 
     void Start()
     {
-        SpawnTowers(team1Towers, towerTeam1Color, "T1", out _t1Icons, out _t1Watch, out _t1Dead);
-        SpawnTowers(team2Towers, towerTeam2Color, "T2", out _t2Icons, out _t2Watch, out _t2Dead);
+        SpawnTowers(team1Towers, towerTeam1Color, "T1",
+            out _t1Icons, out _t1Watch, out _t1Dead);
+
+        SpawnTowers(team2Towers, towerTeam2Color, "T2",
+            out _t2Icons, out _t2Watch, out _t2Dead);
+
         SpawnJungle();
     }
 
@@ -127,7 +148,8 @@ public class MiniMapFollow2D : MonoBehaviour
         }
     }
 
-    private void SpawnTowers(Transform[] src, Color color, string label, out RectTransform[] icons, out Transform[] watch, out bool[] dead)
+    private void SpawnTowers(Transform[] src, Color color, string label,
+                      out RectTransform[] icons, out Transform[] watch, out bool[] dead)
     {
         int n = src != null ? src.Length : 0;
         icons = new RectTransform[n];
@@ -153,7 +175,17 @@ public class MiniMapFollow2D : MonoBehaviour
             inst.anchoredPosition = WorldToMiniMap(s.position);
 
             var img = inst.GetComponent<Image>();
-            if (img) { img.color = color; img.enabled = true; }
+            if (img)
+            {
+                img.sprite = towerIconSprite;     // luôn dùng sprite trắng
+                img.color = color;             // đổi màu theo team
+                img.enabled = true;
+                img.raycastTarget = false;
+            }
+
+            // Xoá border nếu prefab clone từ player
+            for (int c = inst.childCount - 1; c >= 0; c--)
+                Destroy(inst.GetChild(c).gameObject);
 
             bool alive = w && w.gameObject.activeInHierarchy;
             inst.gameObject.SetActive(showTowers && alive);
@@ -254,10 +286,21 @@ public class MiniMapFollow2D : MonoBehaviour
             inst.sizeDelta = jungleIconSize;
             inst.localScale = Vector3.one;
             inst.localRotation = Quaternion.identity;
+
+            // ★ Lấy vị trí đúng từ world position của monster
             inst.anchoredPosition = WorldToMiniMap(s.position);
 
             var img = inst.GetComponent<Image>();
-            if (img) img.color = jungleColor;
+            if (img)
+            {
+                img.sprite = circleSprite; // tròn
+                img.color = jungleColor;
+                img.raycastTarget = false;
+            }
+
+            // Xoá child border thừa nếu clone từ playerIcon
+            for (int c = inst.childCount - 1; c >= 0; c--)
+                Destroy(inst.GetChild(c).gameObject);
 
             inst.gameObject.SetActive(showJungle && s.gameObject.activeInHierarchy);
             _jIcons[i] = inst;
@@ -373,7 +416,8 @@ public class MiniMapFollow2D : MonoBehaviour
 
             var inst = Instantiate(prefab, parent);
             inst.name = $"TeammateIcon_{uid}";
-            inst.localScale = Vector3.one * 0.9f;
+            inst.sizeDelta = avatarIconSize;
+            inst.localScale = Vector3.one;
             inst.gameObject.SetActive(true);
             _teammateIcons[uid] = inst;
         }
@@ -384,18 +428,25 @@ public class MiniMapFollow2D : MonoBehaviour
         if (!_teammateIcons.TryGetValue(userId, out var rt) || !rt) return;
 
         rt.anchoredPosition = WorldToMiniMap(worldPos);
-        rt.localRotation = rotateTeammatesWithPlayer ? Quaternion.Euler(0, 0, -yaw) : Quaternion.identity;
+        rt.localRotation = rotateTeammatesWithPlayer
+            ? Quaternion.Euler(0, 0, -yaw)
+            : Quaternion.identity;
 
         var img = rt.GetComponent<Image>();
         if (!img) return;
 
-        if (heroType > 0)
-        {
-            var sp = GetHeroSprite(heroType);
-            if (sp) img.sprite = sp;
-        }
+        // Lấy sprite avatar
+        Sprite sp = null;
+        if (heroType > 0) sp = GetHeroSprite(heroType);
 
-        if (tintTeammateByTeam) img.color = (teamId == 1) ? team1Color : team2Color;
+        // Xác định màu viền: đồng đội hay địch
+        int localTeam = (B.Instance != null) ? B.Instance.teamId : 0;
+        bool isAlly = (localTeam == 0 || teamId == localTeam);
+        Color borderColor = isAlly ? teammatesBorderColor : enemyBorderColor;
+
+        SetupBorderIcon(rt, sp, borderColor, avatarIconSize, borderSize);
+
+        img.color = Color.white;  // không tint avatar
         img.enabled = alive;
     }
 
@@ -446,7 +497,13 @@ public class MiniMapFollow2D : MonoBehaviour
         if (heroType <= 0 || heroType == _lastHeroType) return;
 
         var sp = GetHeroSprite(heroType);
-        if (sp) playerIconImage.sprite = sp;
+        if (sp)
+        {
+            playerIconImage.sprite = sp;
+            playerIconImage.color = Color.white; // giữ avatar nguyên màu
+                                                 // Cập nhật lại border (size có thể thay đổi)
+            SetupBorderIcon(playerIcon, sp, localPlayerBorderColor, avatarIconSize, borderSize);
+        }
         _lastHeroType = heroType;
     }
 
@@ -479,5 +536,53 @@ public class MiniMapFollow2D : MonoBehaviour
         private static readonly Stack<List<T>> _pool = new Stack<List<T>>(8);
         public static List<T> Get() => _pool.Count > 0 ? _pool.Pop() : new List<T>(16);
         public static void Release(List<T> l) { l.Clear(); _pool.Push(l); }
+    }
+
+    /// <summary>
+    /// Thiết lập icon dạng: [viền tròn (border)] + [avatar ở giữa]
+    /// Nếu chưa có border child thì tạo mới.
+    /// </summary>
+    private void SetupBorderIcon(RectTransform rt, Sprite avatarSprite, Color borderColor, Vector2 iconSize, Vector2 bSize)
+    {
+        if (!rt) return;
+
+        // --- Avatar image (chính là Image trên rt) ---
+        var avatarImg = rt.GetComponent<Image>();
+        if (avatarImg)
+        {
+            if (avatarSprite) avatarImg.sprite = avatarSprite;
+            avatarImg.color = Color.white;          // không tint avatar nữa
+            avatarImg.maskable = true;
+            rt.sizeDelta = iconSize;
+        }
+
+        // --- Border: tìm hoặc tạo child tên "Border" ---
+        Transform borderTr = rt.Find("Border");
+        RectTransform borderRt;
+
+        if (!borderTr)
+        {
+            var borderGo = new GameObject("Border", typeof(RectTransform), typeof(Image));
+            borderRt = borderGo.GetComponent<RectTransform>();
+            borderRt.SetParent(rt, false);
+            borderRt.SetAsFirstSibling();           // vẽ dưới avatar
+        }
+        else
+        {
+            borderRt = borderTr as RectTransform;
+        }
+
+        borderRt.anchoredPosition = Vector2.zero;
+        borderRt.sizeDelta = bSize;
+        borderRt.localScale = Vector3.one;
+        borderRt.localRotation = Quaternion.identity;
+
+        var borderImg = borderRt.GetComponent<Image>();
+        if (borderImg)
+        {
+            borderImg.sprite = circleSprite;        // sprite tròn
+            borderImg.color = borderColor;
+            borderImg.raycastTarget = false;
+        }
     }
 }

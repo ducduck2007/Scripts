@@ -340,6 +340,9 @@ public class PlayerMove : MonoBehaviour
 
     public void NormalAttack()
     {
+        var cc = GetComponent<CCHandler>();
+        if (cc != null && (cc.IsStunned || cc.IsKnockedUp)) return;
+
         if (!isAlive || IsBusy() || isInputLocked) return;
 
         AudioManager.Instance.PlayHeroSound(GetHeroKey(), AudioManager.HeroSoundType.Effort);
@@ -520,6 +523,9 @@ public class PlayerMove : MonoBehaviour
 
     public void CastSkill(int skill, int autoFlag = 0)
     {
+        var cc = GetComponent<CCHandler>();
+        if (cc != null && (cc.IsStunned || cc.IsKnockedUp || cc.IsSilenced)) return;
+
         if (!isAlive || isSkillCasting) return;
 
         if (isNormalAttacking)

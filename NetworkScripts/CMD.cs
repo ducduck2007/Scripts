@@ -27,6 +27,7 @@
     public const int GAME_START = 44;
     public const int GAME_END = 45;
     public const int CANCEL_FIND_MATCH = 46;
+    public const int SURRENDER = 48;
 
     // ==================== 50-59: GAME STATE SNAPSHOTS ====================
     public const int GAME_SNAPSHOT = 50; // players (JsonArray): userId, teamId, x, y, heading, isMoving, isAlive
@@ -135,12 +136,12 @@
 
     // ==================== 270-279: IN-MATCH BUFFS ====================
     public const int BUFF_APPLIED = 270;
-    public const int BUFF_REMOVED = 271;
+    public const int DEBUFF_APPLIED = 271;
     public const int SHIELD_APPLIED = 272;
     public const int SHIELD_BROKEN = 273;
 
     // ==================== 280-299: IN-MATCH DEBUFFS ====================
-    public const int DEBUFF_APPLIED = 280;
+    public const int BUFF_REMOVED = 280;
     public const int DEBUFF_REMOVED = 281;
     public const int CC_STUN = 282;
     public const int CC_SLOW = 283;

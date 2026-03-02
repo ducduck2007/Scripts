@@ -393,6 +393,9 @@ public class PlayerOther : MonoBehaviour
 
     public void SetAttackState(bool isAttack, bool hasTarget)
     {
+        var cc = GetComponent<CCHandler>();
+        if (cc != null && (cc.IsStunned || cc.IsKnockedUp)) return;
+
         if (!isAlive || !isAttack) return;
 
         FindTargetInRange(normalAttackConfig.attackRange);
@@ -619,6 +622,9 @@ public class PlayerOther : MonoBehaviour
 
     public void CastSkillFromServer(int skill, bool hasTarget)
     {
+        var cc = GetComponent<CCHandler>();
+        if (cc != null && (cc.IsStunned || cc.IsKnockedUp || cc.IsSilenced)) return;
+
         if (!isAlive) return;
 
         if (isNormalAttacking)
