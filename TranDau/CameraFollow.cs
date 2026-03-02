@@ -25,11 +25,19 @@ public class CameraFollow : MonoBehaviour
     [Header("Smooth Transition")]
     public float rotationTransitionSpeed = 3f;
 
-    [Header("Intro Cinematic")]
-    public Vector3 introStartPos = new Vector3(268f, 233f, -31f);
-    public Vector3 introStartRot = new Vector3(38.174f, -11.487f, 0.674f);
-    public Vector3 introCenterPos = new Vector3(341.719f, 352f, 38f);
-    public Vector3 introCenterRot = new Vector3(44.585f, -21.13f, 0.201f);
+    [Header("Intro Orbit Settings")]
+    [Tooltip("Bán kính quỹ đạo quay quanh vị trí spawn")]
+    public float introOrbitRadius = 300f;
+    [Tooltip("Độ cao camera khi quay")]
+    public float introOrbitHeight = 250f;
+    [Tooltip("Góc quay tổng cộng (độ). VD: 270 = quay 3/4 vòng")]
+    public float introOrbitDegrees = 270f;
+    [Tooltip("Góc bắt đầu quay (độ). 0 = phía trước, 90 = bên phải")]
+    public float introStartAngle = -90f;
+    [Tooltip("Tỷ lệ thời gian dành cho orbit (0-1), phần còn lại settle vào follow cam")]
+    public float introOrbitPortion = 0.7f;
+
+    [Header("Intro Easing")]
     public float introEaseInPower = 2f;
     public float introEaseOutPower = 2f;
 
@@ -42,8 +50,11 @@ public class CameraFollow : MonoBehaviour
     private bool _isPlayingIntro = false;
     private float _introDuration = 0f;
     private float _introElapsed = 0f;
+    private Vector3 _introOrbitCenter;
     private Vector3 _introEndPos;
     private Vector3 _introEndRot;
+    private Vector3 _orbitLastPos;
+    private Quaternion _orbitLastRot;
 
     private void Awake()
     {
@@ -57,11 +68,7 @@ public class CameraFollow : MonoBehaviour
         transform.rotation = Quaternion.Euler(midLaneRotationX, baseRotationY, baseRotationZ);
     }
 
-    /// <summary>
-    /// Gọi từ TranDauControl khi bắt đầu spawn effect.
-    /// Camera sẽ bay từ introStart → end (vị trí follow thực) trong duration giây.
-    /// </summary>
-    public void PlayIntroFlyTo(float duration)
+    public void PlayIntroFlyTo(float duration, Vector3 spawnPos)
     {
         if (target == null) return;
 
@@ -70,33 +77,25 @@ public class CameraFollow : MonoBehaviour
         _isPlayingIntro = true;
         isFollow = false;
 
-        // Đặt camera về điểm start ngay lập tức
-        transform.position = introStartPos;
-        transform.rotation = Quaternion.Euler(introStartRot);
-        currentDynamicRotationX = introStartRot.x;
+        _introOrbitCenter = spawnPos;
 
-        // Tính end position: vị trí follow thực của player tại thời điểm này
-        _introEndPos = ComputeDesiredFollowPos();
         _introEndRot = new Vector3(midLaneRotationX, baseRotationY, baseRotationZ);
-    }
+        Quaternion endRot = Quaternion.Euler(_introEndRot);
+        _introEndPos = spawnPos
+                       + endRot * Vector3.right * offset.x
+                       + Vector3.up * offset.y
+                       + endRot * Vector3.forward * offset.z;
 
-    private Vector3 ComputeDesiredFollowPos()
-    {
-        if (target == null) return introStartPos;
+        float startAngleRad = introStartAngle * Mathf.Deg2Rad;
+        Vector3 startPos = _introOrbitCenter + new Vector3(
+            Mathf.Sin(startAngleRad) * introOrbitRadius,
+            introOrbitHeight,
+            Mathf.Cos(startAngleRad) * introOrbitRadius
+        );
 
-        // Dùng rotation end để tính offset
-        Quaternion endRot = Quaternion.Euler(_introEndRot != Vector3.zero
-            ? _introEndRot
-            : new Vector3(midLaneRotationX, baseRotationY, baseRotationZ));
-
-        Vector3 right = endRot * Vector3.right;
-        Vector3 up = Vector3.up;
-        Vector3 forward = endRot * Vector3.forward;
-
-        return target.position
-               + right * offset.x
-               + up * offset.y
-               + forward * offset.z;
+        transform.position = startPos;
+        transform.LookAt(_introOrbitCenter + Vector3.up * 10f);
+        currentDynamicRotationX = transform.eulerAngles.x;
     }
 
     private void LateUpdate()
@@ -119,26 +118,50 @@ public class CameraFollow : MonoBehaviour
         _introElapsed += Time.deltaTime;
         float t = Mathf.Clamp01(_introElapsed / _introDuration);
 
-        // Ease in-out cubic
-        float tEased = EaseInOutCustom(t, introEaseInPower, introEaseOutPower);
+        float orbitEnd = Mathf.Clamp01(introOrbitPortion);
 
-        // Cubic Bezier: P0=start, P1=center, P2=center, P3=end (dạng quadratic bọc cubic)
-        Vector3 pos = CubicBezier(introStartPos, introCenterPos, introCenterPos, _introEndPos, tEased);
-        Quaternion rot = Quaternion.Slerp(
-            Quaternion.Euler(introStartRot),
-            Quaternion.Euler(_introEndRot),
-            tEased
-        );
+        if (t <= orbitEnd)
+        {
+            // ===== PHASE 1: Orbit quanh vị trí spawn =====
+            float orbitT = t / orbitEnd;
+            float easedT = EaseInOutCustom(orbitT, introEaseInPower, introEaseOutPower);
 
-        transform.position = pos;
-        transform.rotation = rot;
-        currentDynamicRotationX = rot.eulerAngles.x;
+            float angle = (introStartAngle + easedT * introOrbitDegrees) * Mathf.Deg2Rad;
+
+            // Bán kính và độ cao thu nhỏ dần → zoom in effect
+            float radius = Mathf.Lerp(introOrbitRadius, introOrbitRadius * 0.7f, easedT);
+            float height = Mathf.Lerp(introOrbitHeight, introOrbitHeight * 0.85f, easedT);
+
+            Vector3 pos = _introOrbitCenter + new Vector3(
+                Mathf.Sin(angle) * radius,
+                height,
+                Mathf.Cos(angle) * radius
+            );
+
+            transform.position = pos;
+            transform.LookAt(_introOrbitCenter + Vector3.up * 10f);
+
+            // Snapshot cuối orbit để settle mượt
+            _orbitLastPos = transform.position;
+            _orbitLastRot = transform.rotation;
+        }
+        else
+        {
+            // ===== PHASE 2: Settle vào vị trí follow gameplay =====
+            float settleT = (t - orbitEnd) / (1f - orbitEnd);
+            float easedSettle = settleT * settleT * (3f - 2f * settleT); // smoothstep
+
+            transform.position = Vector3.Lerp(_orbitLastPos, _introEndPos, easedSettle);
+            transform.rotation = Quaternion.Slerp(_orbitLastRot, Quaternion.Euler(_introEndRot), easedSettle);
+        }
+
+        currentDynamicRotationX = transform.eulerAngles.x;
 
         if (t >= 1f)
         {
             _isPlayingIntro = false;
             isFollow = true;
-            // Snap về đúng rotation follow
+            transform.position = _introEndPos;
             transform.rotation = Quaternion.Euler(_introEndRot);
             currentDynamicRotationX = midLaneRotationX;
         }
@@ -150,15 +173,6 @@ public class CameraFollow : MonoBehaviour
             return 0.5f * Mathf.Pow(2f * t, easeIn);
         else
             return 1f - 0.5f * Mathf.Pow(2f * (1f - t), easeOut);
-    }
-
-    private Vector3 CubicBezier(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
-    {
-        float u = 1f - t;
-        return u * u * u * p0
-             + 3f * u * u * t * p1
-             + 3f * u * t * t * p2
-             + t * t * t * p3;
     }
 
     void UpdateDynamicRotation()
@@ -263,17 +277,5 @@ public class CameraFollow : MonoBehaviour
         Gizmos.DrawLine(new Vector3(-200, 0, midLaneZ), new Vector3(200, 0, midLaneZ));
         Gizmos.color = Color.red;
         Gizmos.DrawLine(new Vector3(-200, 0, botLaneZ), new Vector3(200, 0, botLaneZ));
-
-        // Vẽ đường intro bezier để preview trong editor
-        Gizmos.color = Color.cyan;
-        Vector3 prev = introStartPos;
-        for (int i = 1; i <= 20; i++)
-        {
-            float t = i / 20f;
-            Vector3 next = CubicBezier(introStartPos, introCenterPos, introCenterPos,
-                new Vector3(344.1235f, 420.2056f, 89.26767f), t);
-            Gizmos.DrawLine(prev, next);
-            prev = next;
-        }
     }
 }

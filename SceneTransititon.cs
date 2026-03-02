@@ -39,7 +39,7 @@ public class SceneTransititon : MonoBehaviour
     yield return new WaitForSeconds(fadeTime);
 
 
-    ThongBaoController.Instance.LoadVaoTran.SetLoadScene(sceneName);
+    // ThongBaoController.Instance.LoadVaoTran.SetLoadScene(sceneName);
 
     transition.SetTrigger("EndFade");
 

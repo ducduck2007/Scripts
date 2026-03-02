@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 public class ChonTuong : ScaleScreen
 {
-    public TextMeshProUGUI txtTenPlayer, txtTenTuong, txtTenTuong2, txtTrangThai;
+    public TextMeshProUGUI txtTenPlayer, txtTenTuong, txtTenTuong2, txtTrangThai, txtTimeDemNguoc;
     public Image imgTuongChon;
     public Button btnChon;
 
@@ -31,6 +31,25 @@ public class ChonTuong : ScaleScreen
     static readonly Color DARK_COLOR = new Color32(0, 0, 0, 255);
     static readonly Color NORMAL_COLOR = new Color32(255, 255, 255, 255);
 
+    private bool _daDemNguoc;
+
+    public Transform canvasShowHieuUngUI;
+
+    [System.Serializable]
+    public class HieuUngConfig
+    {
+        public GameObject prefab;
+        public Vector3 position;
+        public Vector3 rotation;
+        public Vector3 scale = Vector3.one;
+    }
+
+    [Header("Hieu Ung")]
+    public HieuUngConfig[] hieuUngConfigs;
+    public Transform hieuUngParent; // để trống thì spawn ở root scene
+
+    private GameObject _currentHieuUng;
+
     protected override void Start()
     {
         base.Start();
@@ -52,7 +71,22 @@ public class ChonTuong : ScaleScreen
         if (DialogController.Instance != null && DialogController.Instance.PopupTimTran != null)
             DialogController.Instance.PopupTimTran.Show(false);
 
+        ThongBaoController.Instance.PrewarmLoadVaoTran();
         SetData();
+    }
+
+    private void OnDisable()
+    {
+        if (canvasShowHieuUngUI != null)
+            canvasShowHieuUngUI.gameObject.SetActive(false);
+
+        if (_currentHieuUng != null)
+        {
+            Destroy(_currentHieuUng);
+            _currentHieuUng = null;
+        }
+
+        Debug.Log($"[ChonTuong] OnDisable called! _daDemNguoc={_daDemNguoc}, stackTrace={System.Environment.StackTrace}");
     }
 
     public void Show(bool val = true)
@@ -62,6 +96,8 @@ public class ChonTuong : ScaleScreen
 
     public void SetData()
     {
+        _daDemNguoc = false;
+
         if (txtTenPlayer)
             txtTenPlayer.text = UserData.Instance.UserName;
 
@@ -100,45 +136,71 @@ public class ChonTuong : ScaleScreen
 
         int heroIndex = selectedHeroType - 1;
 
-        // Safety check
         if (tuong == null || tuong.Length == 0) return;
         if (heroIndex < 0 || heroIndex >= tuong.Length) return;
 
-        // Bật đúng hero
         for (int i = 0; i < tuong.Length; i++)
         {
             if (tuong[i])
                 tuong[i].SetActive(i == heroIndex);
         }
 
-        // Showcase animation
-        if (showcase2D != null &&
-            showcaseProfiles != null &&
-            heroIndex >= 0 &&
-            heroIndex < showcaseProfiles.Length)
+        if (tuong[heroIndex] != null && showcase2D != null)
         {
-            if (tuong[heroIndex] != null)
+            HeroShowcaseProfile profile = null;
+
+            if (showcaseProfiles != null &&
+                heroIndex >= 0 &&
+                heroIndex < showcaseProfiles.Length)
             {
-                showcase2D.PlayFor(
-                    tuong[heroIndex].transform,
-                    showcaseProfiles[heroIndex]
-                );
+                profile = showcaseProfiles[heroIndex];
+            }
+
+            if (profile != null)
+            {
+                showcase2D.PlayFor(tuong[heroIndex].transform, profile);
+            }
+            else
+            {
+                showcase2D.ForceIdle(tuong[heroIndex].transform, true);
             }
         }
 
         HandleBgColor(heroIndex);
 
-        // Avatar sprite
         if (imgTuongChon && sprAvtTuong != null &&
             heroIndex >= 0 && heroIndex < sprAvtTuong.Length)
         {
             imgTuongChon.sprite = sprAvtTuong[heroIndex];
         }
 
-        // Hero name
         string heroName = B.Instance.GetNameTuong(selectedHeroType);
         if (txtTenTuong) txtTenTuong.text = heroName;
         if (txtTenTuong2) txtTenTuong2.text = heroName;
+
+        SpawnHieuUng(heroIndex);
+    }
+
+    private void SpawnHieuUng(int heroIndex)
+    {
+        // Hủy hiệu ứng cũ
+        if (_currentHieuUng != null)
+        {
+            Destroy(_currentHieuUng);
+            _currentHieuUng = null;
+        }
+
+        if (hieuUngConfigs == null || heroIndex < 0 || heroIndex >= hieuUngConfigs.Length)
+            return;
+
+        HieuUngConfig config = hieuUngConfigs[heroIndex];
+        if (config == null || config.prefab == null)
+            return;
+
+        _currentHieuUng = Instantiate(config.prefab, hieuUngParent);
+        _currentHieuUng.transform.localPosition = config.position;
+        _currentHieuUng.transform.localEulerAngles = config.rotation;
+        _currentHieuUng.transform.localScale = config.scale;
     }
 
     void HandleBgColor(int heroIndex)
@@ -194,13 +256,34 @@ public class ChonTuong : ScaleScreen
     {
         AudioManager.Instance.AudioClick();
 
-        if (heroType > 0)
-        {
-            SendData.SelectHero(heroType);
-        }
-        else
+        if (heroType <= 0)
         {
             ThongBaoController.Instance.Toast.ShowToast("Bạn chưa chọn tướng.");
+            return;
         }
+
+        if (_daDemNguoc) return;
+        _daDemNguoc = true;
+
+        StatusBtnChon(false);
+        StartCoroutine(CoDemNguocRoiVaoTran());
+    }
+
+    private IEnumerator CoDemNguocRoiVaoTran()
+    {
+        for (int i = 5; i >= 1; i--)
+        {
+            if (txtTimeDemNguoc) txtTimeDemNguoc.text = i.ToString();
+            yield return new WaitForSeconds(1f);
+        }
+        if (txtTimeDemNguoc) txtTimeDemNguoc.text = "";
+
+        ThongBaoController.Instance.LoadVaoTran.Show(true);
+
+        SceneReadyGate.Reset();
+        SendData.SelectHero(heroType);
+        AudioManager.Instance.StopAudioBg();
+
+        ThongBaoController.Instance.StartLoadScene("Play");
     }
 }

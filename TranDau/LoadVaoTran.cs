@@ -1,66 +1,66 @@
 using System.Collections;
 using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class LoadVaoTran : ScaleScreen
 {
     public TextMeshProUGUI loadingText;
 
     private Coroutine routine;
+    private CanvasGroup _cg;
 
     protected override void OnEnable()
     {
         base.OnEnable();
 
-        // Reset gate mỗi lần vào trận
-        PlayLoadGate.Reset();
-
-        if (PopupController.Instance != null)
-            PopupController.Instance.ChonTuong.Show(false);
-
-        routine = StartCoroutine(AnimateDots());
-    }
-
-    protected override void OnDisable()
-    {
-        if (routine != null) StopCoroutine(routine);
-        routine = null;
-    }
-
-    public void SetLoadScene(string scene)
-    {
-        AudioManager.Instance.StopAudioBg();
-        StartCoroutine(LoadSceneAsyncControlled(scene));
-    }
-
-    private IEnumerator LoadSceneAsyncControlled(string sceneName)
-    {
-        // Load scene nhưng CHƯA activate
-        AsyncOperation op = SceneManager.LoadSceneAsync(sceneName);
-        op.allowSceneActivation = false;
-
-        // Chờ load tới ngưỡng 0.9 (Unity load xong assets, chuẩn bị activate)
-        while (op.progress < 0.9f)
+        // Tạo CanvasGroup một lần
+        if (_cg == null)
         {
-            yield return null;
+            _cg = GetComponent<CanvasGroup>();
+            if (_cg == null) _cg = gameObject.AddComponent<CanvasGroup>();
+            SetVisible(false); // bắt đầu ẩn
         }
+    }
 
-        // ===== Phase: cho GC dọn + 1-2 frame rảnh (giảm spike) =====
-        // (Không phải cure OOM, nhưng giảm peak)
-        System.GC.Collect();
-        yield return null;
-        yield return null;
+    /// <summary>
+    /// Ẩn/hiện bằng CanvasGroup — không SetActive, không spike
+    /// </summary>
+    private void SetVisible(bool val)
+    {
+        if (_cg == null) return;
+        _cg.alpha = val ? 1f : 0f;
+        _cg.interactable = val;
+        _cg.blocksRaycasts = val;
+    }
 
-        // Activate scene
-        op.allowSceneActivation = true;
+    /// <summary>
+    /// Prewarm: object luôn active, chỉ ẩn bằng CanvasGroup
+    /// </summary>
+    public void Prewarm()
+    {
+        SetVisible(false);
+    }
 
-        while (!op.isDone)
-            yield return null;
+    /// <summary>
+    /// Show thật
+    /// </summary>
+    public void Show(bool val = true)
+    {
+        if (val)
+        {
+            SetVisible(true);
+            PlayLoadGate.Reset();
 
-        // Scene active xong. Lúc này TranDauControl.Start sẽ chạy.
-        // Nhưng snapshot vẫn đang bị gate (Ready=false).
-        // TranDauControl sẽ là nơi MarkReady + Flush.
+            if (PopupController.Instance != null)
+                PopupController.Instance.ChonTuong.Show(false);
+
+            if (routine != null) StopCoroutine(routine);
+            routine = StartCoroutine(AnimateDots());
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
     private IEnumerator AnimateDots()
@@ -71,14 +71,7 @@ public class LoadVaoTran : ScaleScreen
             dotCount = (dotCount + 1) % 4;
             if (loadingText != null)
                 loadingText.text = "Đang vào trận" + new string('.', dotCount);
-
             yield return new WaitForSeconds(0.4f);
         }
-    }
-
-    public void Show(bool val = true)
-    {
-        if (val) gameObject.SetActive(true);
-        else Destroy(gameObject);
     }
 }

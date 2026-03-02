@@ -361,8 +361,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
     private void Update()
     {
-        if (WaitingForServer) return;
-
         TrySpawnDueMonsters();
 
         refreshCacheTimer += Time.deltaTime;
@@ -1294,6 +1292,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         var pm = playerMove;
         if (pm == null) yield break;
 
+        // Bắt đầu đếm giờ
         if (GameTimerManager.Instance != null)
             GameTimerManager.Instance.StartTimer();
 
@@ -1301,7 +1300,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         pm.SetPotion();
 
         // ✅ Đọc vị trí THỰC TẾ từ controller sau khi SetPotion (không dùng B.Instance trực tiếp)
-        Vector3 pos = (pm.controller != null)
+        Vector3 pos = pm.controller != null
             ? pm.controller.transform.position
             : new Vector3(B.Instance.PosX, 0f, B.Instance.PosZ);
 
@@ -1310,9 +1309,9 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         if (spawnEffectPrefab != null)
             effectInstance = Instantiate(spawnEffectPrefab, pos, Quaternion.identity);
 
-        // Camera bay intro — set target trước để tính end pos
+        // Camera bay intro
         cameraF.SetTarget(pm.transform);
-        cameraF.PlayIntroFlyTo(spawnEffectDuration, pos);
+        cameraF.PlayIntroFlyTo(spawnEffectDuration);
 
         yield return new WaitForSeconds(spawnEffectDuration);
 

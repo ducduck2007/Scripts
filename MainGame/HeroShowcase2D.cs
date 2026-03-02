@@ -218,4 +218,30 @@ public class HeroShowcase2D : MonoBehaviour
         if (enabled)
             s.RebaseToCurrent();
     }
+
+    public void ForceIdle(Transform target, bool idle = true)
+    {
+        if (target == null) return;
+
+        // Stop sequence cũ nếu có
+        if (_co != null) { StopCoroutine(_co); _co = null; }
+        _paused = false;
+
+        // Trả swipe của hero cũ
+        if (_target != null)
+            SetSwipe(_target, true);
+
+        _target = target;
+        _profile = null;
+
+        // đảm bảo animator chạy
+        var anim = _target.GetComponentInChildren<Animator>(true);
+        if (anim != null) anim.speed = 1f;
+
+        // set bool isIdle
+        SetIdle(_target, idle);
+
+        // bật swipe lại (nếu có)
+        SetSwipe(_target, true);
+    }
 }

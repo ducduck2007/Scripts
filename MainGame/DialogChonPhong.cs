@@ -97,7 +97,7 @@ public class DialogChonPhong : ScaleScreen
         Resources.UnloadUnusedAssets();
         System.GC.Collect();
 
-        ThongBaoController.Instance.LoadVaoTran.SetLoadScene("DauTapTest");
+        // ThongBaoController.Instance.LoadVaoTran.SetLoadScene("DauTapTest");
     }
 
     public void ClickPhongVip()

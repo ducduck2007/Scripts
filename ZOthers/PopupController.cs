@@ -2,6 +2,9 @@ using UnityEngine;
 
 public class PopupController : ManualSingleton<PopupController>
 {
+    // Scene ref - được bind từ BinderClass.Awake()
+    public Transform canvasShowHieuUngUI;
+
     private GameObject Load(string namePath)
     {
         return Resources.Load(namePath) as GameObject;
@@ -80,5 +83,23 @@ public class PopupController : ManualSingleton<PopupController>
             }
             return _chonTuong;
         }
+    }
+
+    /// <summary>
+    /// Bind canvasShowHieuUngUI rồi mới Show — gọi thay cho ChonTuong.Show() trực tiếp
+    /// </summary>
+    public void ShowChonTuong()
+    {
+        if (_chonTuong == null)
+            _chonTuong = AgentUnity.InstanceObject<ChonTuong>(Load(PathResource.ChonTuong), transform);
+
+        _chonTuong.canvasShowHieuUngUI = canvasShowHieuUngUI;
+        _chonTuong.Show(true);
+
+        // Bật canvas SAU khi Show vì AgentUnity.InstanceObject trigger OnEnable ngay khi tạo
+        if (canvasShowHieuUngUI != null)
+            canvasShowHieuUngUI.gameObject.SetActive(true);
+        else
+            Debug.LogWarning("[PopupController] canvasShowHieuUngUI là NULL!");
     }
 }

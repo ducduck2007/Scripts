@@ -195,7 +195,7 @@ public class PlayerMove : MonoBehaviour
 
     private void Start()
     {
-        isInputLocked = false; // ← thêm dòng này đầu tiên
+        // isInputLocked = false; // ← thêm dòng này đầu tiên
 
         if (ShouldUseHealthBar())
         {
@@ -1106,6 +1106,8 @@ public class PlayerMove : MonoBehaviour
 
     private void HandleNormalMovement()
     {
+        if (TranDauControl.WaitingForServer) return;
+
         if (controller == null) return;
 
         Vector2 input = MenuController.Instance.joystick.inputVector;
@@ -1514,6 +1516,8 @@ public class PlayerMove : MonoBehaviour
 
     private IEnumerator CoType5DashThenSpawn(SkillConfig cfg, TranDauControl.SkillCastInfo info)
     {
+        CancelInvoke(nameof(EndSkillAnimationWrapper));
+
         if (controller == null || cfg == null) yield break;
 
         Vector3 dir = info.dir;
@@ -1538,50 +1542,42 @@ public class PlayerMove : MonoBehaviour
             controller.transform.rotation = Quaternion.LookRotation(dir);
 
         float speed = dashSpeedType5;
-        float timeout = (range / speed) * 3f + 1f; // tối đa gấp 3 lần thời gian lý thuyết
+        float timeout = Mathf.Max(0.5f, (range / speed) * 2f);
         float elapsed = 0f;
-        Vector3 lastPos = startPos;
-        float stuckTimer = 0f;
-        const float STUCK_THRESHOLD = 0.05f; // nếu di chuyển < 0.05 unit/frame liên tục 0.3s → coi là stuck
+
+        // Đếm số frame liên tiếp bị Sides collision
+        int consecutiveSidesFrames = 0;
+        const int MAX_SIDES_FRAMES = 2; // chỉ cần 2 frame liên tiếp bị Sides → dừng ngay
+
+        string exitReason = "unknown";
 
         while (controller != null && controller.enabled && controller.gameObject.activeInHierarchy)
         {
             elapsed += Time.deltaTime;
 
-            // Timeout an toàn
-            if (elapsed >= timeout) break;
+            if (elapsed >= timeout)
+            {
+                exitReason = "TIMEOUT";
+                break;
+            }
 
             Vector3 current = controller.transform.position;
-            float dist = Vector3.Distance(
-                new Vector3(current.x, 0f, current.z),
-                new Vector3(destination.x, 0f, destination.z)
-            );
+            float distXZ = new Vector2(
+                destination.x - current.x,
+                destination.z - current.z
+            ).magnitude;
 
-            if (dist <= 0.15f) break;
-
-            // Phát hiện stuck: không di chuyển được
-            float moved = Vector3.Distance(
-                new Vector3(current.x, 0f, current.z),
-                new Vector3(lastPos.x, 0f, lastPos.z)
-            );
-            if (moved < STUCK_THRESHOLD * Time.deltaTime * speed * 0.1f)
+            if (distXZ <= 0.2f)
             {
-                stuckTimer += Time.deltaTime;
-                if (stuckTimer >= 0.3f) break; // stuck 0.3s → thoát
+                exitReason = "REACHED_DEST";
+                break;
             }
-            else
-            {
-                stuckTimer = 0f;
-            }
-            lastPos = current;
 
-            Vector3 move = new Vector3(dir.x, 0f, dir.z) * speed * Time.deltaTime;
+            float stepDist = speed * Time.deltaTime;
+            if (stepDist > distXZ) stepDist = distXZ;
 
-            // Không vượt quá đích
-            if (move.magnitude > dist)
-                move = new Vector3(dir.x, 0f, dir.z) * dist;
+            Vector3 move = new Vector3(dir.x * stepDist, 0f, dir.z * stepDist);
 
-            // Gravity
             if (controller.isGrounded)
                 velocity.y = -2f;
             else
@@ -1589,34 +1585,56 @@ public class PlayerMove : MonoBehaviour
 
             move.y = velocity.y * Time.deltaTime;
 
-            controller.Move(move);
+            CollisionFlags flags = controller.Move(move);
+
+            // Nếu bị block ngang (Sides) → đếm frame liên tiếp
+            bool hitSides = (flags & CollisionFlags.Sides) != 0;
+            if (hitSides)
+            {
+                consecutiveSidesFrames++;
+                if (consecutiveSidesFrames >= MAX_SIDES_FRAMES)
+                {
+                    exitReason = "HIT_COLLIDER_SIDES";
+                    break;
+                }
+            }
+            else
+            {
+                consecutiveSidesFrames = 0;
+            }
+
             yield return null;
         }
 
-        // Snap tới đích
+        // Snap nhẹ tới đích chỉ khi còn rất gần (không bị block)
         if (controller != null && controller.gameObject.activeInHierarchy)
         {
             Vector3 pos = controller.transform.position;
-            Vector3 snapDelta = new Vector3(
+            float remainDist = new Vector2(
                 destination.x - pos.x,
-                0f,
                 destination.z - pos.z
-            );
-            if (snapDelta.sqrMagnitude > 0.0001f)
-                controller.Move(snapDelta);
+            ).magnitude;
+
+            if (remainDist < 1f)
+            {
+                Vector3 snapDelta = new Vector3(destination.x - pos.x, 0f, destination.z - pos.z);
+                if (snapDelta.sqrMagnitude > 0.0001f)
+                    controller.Move(snapDelta);
+            }
         }
 
-        // Spawn skillObject tại điểm cuối
-        if (cfg.skillObject != null)
+        // Spawn skillObject tại vị trí thực tế của nhân vật
+        if (cfg.skillObject != null && controller != null)
         {
-            cfg.skillObject.transform.position = destination;
+            Vector3 spawnPos = controller.transform.position;
+            cfg.skillObject.transform.position = spawnPos;
             cfg.skillObject.transform.rotation = (dir.sqrMagnitude > 0.0001f)
                 ? Quaternion.LookRotation(dir)
                 : controller.transform.rotation;
             cfg.skillObject.SetActive(true);
         }
 
-        // Reset combat state để joystick hoạt động lại
+        // Reset combat state
         isSkillCasting = false;
         animator.SetBool("isSkill1", false);
         animator.SetBool("isSkill2", false);

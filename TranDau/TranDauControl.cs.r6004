@@ -1297,20 +1297,12 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         if (GameTimerManager.Instance != null)
             GameTimerManager.Instance.StartTimer();
 
-        // ✅ Gọi SetPotion TRƯỚC để đặt controller đúng vị trí từ B.Instance
-        pm.SetPotion();
+        Vector3 pos = new Vector3(B.Instance.PosX, 0f, B.Instance.PosZ);
 
-        // ✅ Đọc vị trí THỰC TẾ từ controller sau khi SetPotion (không dùng B.Instance trực tiếp)
-        Vector3 pos = (pm.controller != null)
-            ? pm.controller.transform.position
-            : new Vector3(B.Instance.PosX, 0f, B.Instance.PosZ);
-
-        // Spawn hiệu ứng
         GameObject effectInstance = null;
         if (spawnEffectPrefab != null)
             effectInstance = Instantiate(spawnEffectPrefab, pos, Quaternion.identity);
 
-        // Camera bay intro — set target trước để tính end pos
         cameraF.SetTarget(pm.transform);
         cameraF.PlayIntroFlyTo(spawnEffectDuration, pos);
 
@@ -1319,8 +1311,8 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         if (effectInstance != null)
             Destroy(effectInstance);
 
-        // Bật nhân vật (SetPotion đã gọi ở trên rồi, không cần gọi lại)
         pm.gameObject.SetActive(true);
+        pm.SetPotion();
         pm.isInputLocked = false;
 
         if (pm.HealthBar != null)

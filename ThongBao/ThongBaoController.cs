@@ -187,4 +187,29 @@ public class ThongBaoController : ManualSingleton<ThongBaoController>
         );
     }
 
+    public void StartLoadScene(string sceneName)
+    {
+        StartCoroutine(CoLoadSceneNgam(sceneName));
+    }
+
+    private IEnumerator CoLoadSceneNgam(string sceneName)
+    {
+        AsyncOperation op = UnityEngine.SceneManagement.SceneManager.LoadSceneAsync(sceneName);
+        op.allowSceneActivation = false;
+
+        while (op.progress < 0.9f)
+            yield return null;
+
+        System.GC.Collect();
+        yield return null;
+        yield return null;
+
+        SceneReadyGate.MarkSceneReady(op);
+    }
+
+    public void PrewarmLoadVaoTran()
+    {
+        // Chỉ cần access getter để Instantiate sẵn, Awake sẽ tự SetVisible(false)
+        var _ = LoadVaoTran;
+    }
 }
