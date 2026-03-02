@@ -28,7 +28,7 @@ public class CCHandler : MonoBehaviour
     private float _originalMoveSpeed;
     private float _originalOtherMoveSpeed;
     private const float SLOW_FACTOR = 0.5f;
-    private const float KNOCKUP_HEIGHT = 120f;
+    private const float KNOCKUP_HEIGHT = 80f;
 
     private GameObject _bleedInstance;
     private GameObject _stunInstance;
