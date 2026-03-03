@@ -461,14 +461,17 @@ public class MenuController : ScaleScreen
 
     private string GetHeroKey()
     {
-        switch (localHeroType)
+        if (B.Instance == null) return null;
+
+        string name = B.Instance.GetNameTuong(localHeroType);
+
+        if (string.IsNullOrEmpty(name))
         {
-            case 1: return "Kayn";
-            case 2: return "Leona";
-            default:
-                Debug.LogWarning($"[Audio] Unknown heroType: {localHeroType}");
-                return null;
+            Debug.LogWarning($"[Audio] Unknown heroType: {localHeroType}");
+            return null;
         }
+
+        return name;
     }
 
     private bool HasAtLeastOneLevel(int skillIndex) => GetDisplayedLevel(skillIndex) >= 1;
@@ -1097,8 +1100,8 @@ public class MenuController : ScaleScreen
         _exitPopupShowing = true;
 
         tb.PopupTwoButton.ShowPopupTwoButton(
-            title: "Đầu hàng",
-            content: "Bạn có chắc muốn đầu hàng không?",
+            title: "Thua trận",
+            content: "Bạn có muốn thoát khỏi game không? Nếu đồng ý thoát đội bạn sẽ bị thua trận.",
             txtBtnExit: "Hủy",
             actionOk: () =>
             {

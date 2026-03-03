@@ -8,19 +8,19 @@ public class AudioManager : ManualSingleton<AudioManager>
     [SerializeField] private AudioSource audioSound;
     private static bool isMusic = true;
     private static bool isSound = true;
-    
+
     private void Start()
     {
         DontDestroyOnLoad(gameObject);
         SetSoundConfig();
     }
-    
+
     public void SetSoundConfig()
     {
         SetUpMusicStartGame();
         SetUpSoundStartGame();
     }
-    
+
     private void SetUpMusicStartGame()
     {
         isMusic = AgentUnity.GetInt(KeyLocalSave.PP_AudioBg) != 1;
@@ -37,17 +37,17 @@ public class AudioManager : ManualSingleton<AudioManager>
             audioSound.Stop();
         }
     }
-    
+
     public bool GetSoundConfig()
     {
         return isSound;
     }
-    
+
     public bool GetMusicConfig()
     {
         return isMusic;
     }
-    
+
     public void PlayAudioBg()
     {
         if (isMusic)
@@ -79,7 +79,7 @@ public class AudioManager : ManualSingleton<AudioManager>
             audioSound.Play();
         }
     }
-    
+
     public void AudioClick()
     {
         if (isSound)
@@ -88,7 +88,7 @@ public class AudioManager : ManualSingleton<AudioManager>
             audioSound.Play();
         }
     }
-    
+
     public void AudioHoanThanhNhiemVu()
     {
         if (isSound)
@@ -97,7 +97,7 @@ public class AudioManager : ManualSingleton<AudioManager>
             audioSound.Play();
         }
     }
-    
+
     public void AudioMuaDoTrongShop()
     {
         if (isSound)
@@ -106,7 +106,7 @@ public class AudioManager : ManualSingleton<AudioManager>
             audioSound.Play();
         }
     }
-    
+
     public void AudioOpenItem()
     {
         if (isSound)
@@ -115,7 +115,7 @@ public class AudioManager : ManualSingleton<AudioManager>
             audioSound.Play();
         }
     }
-    
+
     public void AudioTinNhanDen()
     {
         if (isSound)
@@ -125,7 +125,6 @@ public class AudioManager : ManualSingleton<AudioManager>
         }
     }
 
-    
     public void AudioVang()
     {
         if (isSound)
@@ -133,7 +132,7 @@ public class AudioManager : ManualSingleton<AudioManager>
             audioSound.clip = LoadSound(PathAudio.Vang);
             audioSound.Play();
         }
-    } 
+    }
 
     public void AudioNormalAttack()
     {
@@ -144,74 +143,90 @@ public class AudioManager : ManualSingleton<AudioManager>
         }
     }
 
-    // Audio cho giọng nhân vật
+    /// <summary>
+    /// Phát voice của hero (Voices folder).
+    /// heroFolder = tên folder trong Resources/AudioTuong/, ví dụ "Kayn", "Leona", "Torch"...
+    /// keyword: "attack", "spellcast", "dying", "effort", "taunt", "laugh", "move"
+    /// </summary>
     public void PlayHeroSound(string heroFolder, HeroSoundType type)
     {
-    if (!isSound) return;
+        if (!isSound) return;
+        if (string.IsNullOrEmpty(heroFolder)) return;
 
-    string keyword = type switch
-    {
-        HeroSoundType.NormalAttack => "attack",
-        HeroSoundType.Skill        => "spellcast",
-        HeroSoundType.Dying        => "dying",
-        HeroSoundType.Effort       => "effort",
-        HeroSoundType.Taunt        => "taunt",
-        HeroSoundType.Laugh        => "laugh",
-        HeroSoundType.Move         => "move",
-        _ => ""
-    };
+        string keyword = type switch
+        {
+            HeroSoundType.NormalAttack => "attack",
+            HeroSoundType.Skill => "spellcast",
+            HeroSoundType.Dying => "dying",
+            HeroSoundType.Effort => "effort",
+            HeroSoundType.Taunt => "taunt",
+            HeroSoundType.Laugh => "laugh",
+            HeroSoundType.Move => "move",
+            _ => ""
+        };
 
-    if (string.IsNullOrEmpty(keyword)) return;
+        if (string.IsNullOrEmpty(keyword)) return;
 
-    AudioClip[] clips = Resources.LoadAll<AudioClip>($"AudioTuong/{heroFolder}/Voices");
-    if (clips == null || clips.Length == 0) return;
-
-    List<AudioClip> list = new List<AudioClip>();
-    foreach (var c in clips)
-    {
-        if (c.name.ToLower().Contains(keyword))
-            list.Add(c);
-    }
-
-    if (list.Count == 0) return;
-
-    audioSound.PlayOneShot(list[Random.Range(0, list.Count)]);
-    }
-
-    // Audio cho kỹ năng
-    public void PlaySkillSound(string heroFolder)
-    {
-        if(!isSound) return;
-
-        AudioClip[] clips = Resources.LoadAll<AudioClip>($"AudioTuong/{heroFolder}/Skills");
+        AudioClip[] clips = Resources.LoadAll<AudioClip>($"AudioTuong/{heroFolder}/Voices");
         if (clips == null || clips.Length == 0) return;
-        
+
         List<AudioClip> list = new List<AudioClip>();
         foreach (var c in clips)
         {
-            if (c.name.ToLower().Contains("Katana_Swing_Cut".ToLower()))
+            if (c.name.ToLower().Contains(keyword))
                 list.Add(c);
         }
+
         if (list.Count == 0) return;
+
         audioSound.PlayOneShot(list[Random.Range(0, list.Count)]);
+    }
+
+    /// <summary>
+    /// Phát sound hiệu ứng skill của hero (Skills folder).
+    /// heroFolder = tên folder trong Resources/AudioTuong/, ví dụ "Kayn", "Leona", "Torch"...
+    /// Tìm file có tên chứa keyword "skill" (đặt tên file theo pattern: skill_1.mp3, skill_cast.mp3,...).
+    /// Nếu không có file nào khớp, phát random bất kỳ clip trong folder.
+    /// </summary>
+    public void PlaySkillSound(string heroFolder)
+    {
+        if (!isSound) return;
+        if (string.IsNullOrEmpty(heroFolder)) return;
+
+        AudioClip[] clips = Resources.LoadAll<AudioClip>($"AudioTuong/{heroFolder}/Skills");
+        if (clips == null || clips.Length == 0) return;
+
+        // Ưu tiên file tên chứa "skill"
+        List<AudioClip> matched = new List<AudioClip>();
+        foreach (var c in clips)
+        {
+            if (c.name.ToLower().Contains("skill"))
+                matched.Add(c);
+        }
+
+        // Nếu không có file nào khớp keyword, fallback phát random toàn bộ folder
+        if (matched.Count == 0)
+        {
+            audioSound.PlayOneShot(clips[Random.Range(0, clips.Length)]);
+            return;
+        }
+
+        audioSound.PlayOneShot(matched[Random.Range(0, matched.Count)]);
     }
 
     public enum HeroSoundType
     {
-    NormalAttack,
-    Skill,
-    Dying,
-    Effort,
-    Taunt,
-    Laugh,
-    Move
+        NormalAttack,
+        Skill,
+        Dying,
+        Effort,
+        Taunt,
+        Laugh,
+        Move
     }
 
     private static AudioClip LoadSound(string path)
     {
-        // path = path.Replace(".mp3", "");
         return Resources.Load<AudioClip>(path);
     }
-    
-
 }

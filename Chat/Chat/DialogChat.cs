@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using DG.Tweening;
 using TMPro;
@@ -33,6 +34,14 @@ public class DialogChat : ScaleScreen
     public GameObject itemFriendChatOnline;  // template friend item
 
     // =========================
+    // Keyboard lift settings
+    // =========================
+    [Header("Keyboard Lift")]
+    /// <summary>Target Y tính theo tỷ lệ Screen.height. Ví dụ 1/3 = objInput nằm ở 1/3 dưới màn hình khi bàn phím mở.</summary>
+    [SerializeField] private float pushUpScreenRatio = 1f / 3f;
+    [SerializeField] private float keyboardAnimDuration = 0.3f;
+
+    // =========================
     // State
     // =========================
     private bool _subscribedWorld;
@@ -41,6 +50,14 @@ public class DialogChat : ScaleScreen
 
     // friendId -> name
     private readonly Dictionary<long, string> _friendNameCache = new Dictionary<long, string>();
+
+    public Transform objInput;
+
+    // Keyboard lift state
+    private Vector3 _objInputDefaultLocalPos;
+    private bool _objInputDefaultPosCaptured = false;
+    private bool _keyboardVisible = false;
+    private Coroutine _keyboardCheckCoroutine;
 
     protected override void OnEnable()
     {
@@ -54,12 +71,33 @@ public class DialogChat : ScaleScreen
         RebuildWorldFromCache();
         BuildFriendList();
         ScrollWorldToBottom();
+
+        // Capture vị trí gốc của objInput mỗi lần mở dialog
+        if (objInput != null)
+        {
+            _objInputDefaultLocalPos = objInput.localPosition;
+            _objInputDefaultPosCaptured = true;
+        }
+
+        // Bắt đầu coroutine theo dõi bàn phím
+        if (_keyboardCheckCoroutine != null) StopCoroutine(_keyboardCheckCoroutine);
+        _keyboardCheckCoroutine = StartCoroutine(KeyboardWatchCoroutine());
     }
 
     protected override void OnDisable()
     {
         base.OnDisable();
         HookWorldEvents(false);
+
+        // Dừng coroutine và reset vị trí
+        if (_keyboardCheckCoroutine != null)
+        {
+            StopCoroutine(_keyboardCheckCoroutine);
+            _keyboardCheckCoroutine = null;
+        }
+
+        ResetObjInputPosition(animated: false);
+        _keyboardVisible = false;
     }
 
     protected override void Start()
@@ -67,6 +105,80 @@ public class DialogChat : ScaleScreen
         base.Start();
         EnsureRefs();
         WireUIOnce();
+    }
+
+    // =========================================================
+    // KEYBOARD WATCH COROUTINE
+    // =========================================================
+    /// <summary>
+    /// Theo dõi trạng thái TouchScreenKeyboard mỗi frame để đẩy/hạ objInput.
+    /// Dùng coroutine thay vì Update() để không ảnh hưởng khi dialog inactive.
+    /// </summary>
+    private IEnumerator KeyboardWatchCoroutine()
+    {
+        while (true)
+        {
+            bool isNowVisible = IsKeyboardCurrentlyVisible();
+
+            if (isNowVisible && !_keyboardVisible)
+            {
+                _keyboardVisible = true;
+                LiftObjInput();
+            }
+            else if (!isNowVisible && _keyboardVisible)
+            {
+                _keyboardVisible = false;
+                ResetObjInputPosition(animated: true);
+            }
+
+            yield return null; // check mỗi frame
+        }
+    }
+
+    private bool IsKeyboardCurrentlyVisible()
+    {
+#if UNITY_EDITOR
+        // Trong Editor không có touch keyboard thật; dựa vào isFocused của inputField
+        return inputChat != null && inputChat.isFocused;
+#else
+        return TouchScreenKeyboard.visible;
+#endif
+    }
+
+    private void LiftObjInput()
+    {
+        if (objInput == null || !_objInputDefaultPosCaptured) return;
+
+        // Lấy RectTransform của objInput để tính screen position
+        var rt = objInput as RectTransform;
+        if (rt == null) rt = objInput.GetComponent<RectTransform>();
+
+        // Target: objInput nằm ở 1/3 trên từ bottom (tương tự Login dùng ratio 1/6 cho input nhỏ hơn)
+        float targetScreenY = Screen.height * pushUpScreenRatio;
+
+        // Vị trí screen hiện tại của objInput
+        Vector2 screenPos = RectTransformUtility.WorldToScreenPoint(null, objInput.position);
+
+        float offsetY = 0f;
+        if (screenPos.y < targetScreenY)
+            offsetY = targetScreenY - screenPos.y;
+
+        Vector3 targetPos = _objInputDefaultLocalPos + new Vector3(0f, offsetY, 0f);
+
+        DOTween.Kill(objInput);
+        objInput.DOLocalMove(targetPos, keyboardAnimDuration).SetEase(Ease.OutCubic);
+    }
+
+    private void ResetObjInputPosition(bool animated)
+    {
+        if (objInput == null || !_objInputDefaultPosCaptured) return;
+
+        DOTween.Kill(objInput);
+
+        if (animated)
+            objInput.DOLocalMove(_objInputDefaultLocalPos, keyboardAnimDuration).SetEase(Ease.OutCubic);
+        else
+            objInput.localPosition = _objInputDefaultLocalPos;
     }
 
     // =========================================================
@@ -159,6 +271,13 @@ public class DialogChat : ScaleScreen
 
         if (contentFriend == null && scrollFriend != null)
             contentFriend = scrollFriend.content;
+
+        // ---------- OBJ INPUT ----------
+        if (objInput == null)
+        {
+            var t = transform.Find("GameObjectChat/InputChat/objInput");
+            if (t) objInput = t;
+        }
     }
 
     // =========================================================

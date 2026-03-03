@@ -234,7 +234,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
             return cached;
 
         long myId = UserData.Instance != null ? UserData.Instance.UserID : 0;
-
         if (myId != 0 && userId == myId)
         {
             int myHeroType = (B.Instance != null ? B.Instance.heroPlayer + 1 : 0);
@@ -257,7 +256,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
             if (h == int.MinValue) h = 0;
             int idx = Mathf.Abs(h) % _availableHeroTypes.Count;
             int ht = _availableHeroTypes[idx];
-            CacheHeroType(userId, ht);
+            // ✅ KHÔNG gọi CacheHeroType ở đây — tránh ghi đè cache đúng bằng giá trị tạm
             return ht;
         }
     }
@@ -532,6 +531,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
             _lastSeenOtherTime[p.userId] = now;
 
             int resolvedHeroType = ResolveAndCacheHeroType(p.userId, p.teamId, p.heroType);
+            Debug.Log($"[INIT] uid={p.userId} p.heroType={p.heroType} resolved={resolvedHeroType} cacheNow={(HeroTypeByUserId.TryGetValue(p.userId, out var dbg) ? dbg : -1)}");
             var po = GetOrCreateOther(p.userId, resolvedHeroType);
 
             if (po == null)
@@ -1146,13 +1146,15 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
         if (othersByUserId.TryGetValue(userId, out var existing) && existing != null)
         {
-            HeroTypeByUserId.TryGetValue(userId, out var cachedHeroType);
+            // ✅ So sánh với heroType thực tế đã spawn trên prefab, không dùng dict
+            int existingHeroType = existing.spawnedHeroType;
 
-            if (cachedHeroType > 0 && heroType > 0 && cachedHeroType != heroType)
+            if (existingHeroType > 0 && heroType > 0 && existingHeroType != heroType)
             {
                 Destroy(existing.gameObject);
                 othersByUserId.Remove(userId);
                 playersByUserId.Remove(userId);
+                // tiếp tục xuống để tạo mới
             }
             else
             {
@@ -1182,6 +1184,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         }
 
         var po = Instantiate(prefab, Vector3.zero, Quaternion.identity);
+        po.spawnedHeroType = resolvedHeroType; // ✅ lưu lại heroType thực tế
 
         if (othersContainer != null)
             po.transform.SetParent(othersContainer, false);
@@ -1372,5 +1375,49 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
         if (pm.HealthBar != null)
             pm.HealthBar.gameObject.SetActive(true);
+    }
+
+    public void RebuildOtherIfHeroTypeMismatch(long userId, int correctHeroType)
+    {
+        if (userId <= 0 || correctHeroType <= 0) return;
+
+        if (!othersByUserId.TryGetValue(userId, out var existing) || existing == null)
+            return; // chưa spawn, không cần làm gì
+
+        if (existing.spawnedHeroType == correctHeroType)
+            return; // đã đúng
+
+        // Lưu lại trạng thái cần thiết trước khi destroy
+        bool wasActive = existing.gameObject.activeSelf;
+        int savedTeamId = existing.teamId;
+        Vector3 savedPos = existing.transform.position;
+        float savedHeading = existing.transform.eulerAngles.y;
+
+        Destroy(existing.gameObject);
+        othersByUserId.Remove(userId);
+        playersByUserId.Remove(userId);
+
+        // Tạo lại với heroType đúng
+        var po = GetOrCreateOther(userId, correctHeroType);
+        if (po == null) return;
+
+        po.SetTeamId(savedTeamId);
+
+        int layer = LayerMask.NameToLayer(savedTeamId == 1 ? "player1" : "player2");
+        po.gameObject.layer = layer;
+
+        // Đặt vị trí về chỗ cũ
+        po.transform.position = savedPos;
+
+        if (wasActive)
+        {
+            po.gameObject.SetActive(true);
+            if (po.HealthBar != null)
+                po.HealthBar.gameObject.SetActive(true);
+        }
+
+        RegisterPlayer(userId, po.gameObject);
+
+        Debug.Log($"[TranDauControl] Rebuilt PlayerOther uid={userId}: heroType {existing?.spawnedHeroType} → {correctHeroType}");
     }
 }

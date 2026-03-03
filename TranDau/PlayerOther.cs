@@ -105,6 +105,7 @@ public class PlayerOther : MonoBehaviour
     private string lastStateName = "";
 
     public long userId;
+    [HideInInspector] public int spawnedHeroType = 0;
 
     private const float DEFAULT_SKILL_MOVE_SPEED = 10f;
 

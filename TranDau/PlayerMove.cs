@@ -195,8 +195,6 @@ public class PlayerMove : MonoBehaviour
 
     private void Start()
     {
-        // isInputLocked = false; // ← thêm dòng này đầu tiên
-
         if (ShouldUseHealthBar())
         {
             SafeSetThanhMau(0);
@@ -211,7 +209,6 @@ public class PlayerMove : MonoBehaviour
         isAlive = true;
         DisableAllAimCanvases();
         CacheOriginIfNeeded(txtMinusHp, ref minusHpOriginPos, ref minusHpOriginCached);
-
 
         var v = GetLowHpVignette();
         if (v != null)
@@ -345,7 +342,12 @@ public class PlayerMove : MonoBehaviour
 
         if (!isAlive || IsBusy() || isInputLocked) return;
 
-        AudioManager.Instance.PlayHeroSound(GetHeroKey(), AudioManager.HeroSoundType.Effort);
+        // Phát voice effort + sound đánh thường cho tất cả hero
+        string heroKey = GetHeroKey();
+        if (!string.IsNullOrEmpty(heroKey))
+        {
+            AudioManager.Instance.PlayHeroSound(heroKey, AudioManager.HeroSoundType.Effort);
+        }
         AudioManager.Instance.AudioNormalAttack();
 
         ShowNormalAttackRangeOnce();
@@ -555,7 +557,7 @@ public class PlayerMove : MonoBehaviour
 
         if (useServerAuto)
         {
-            DisableAllAimCanvases(); // auto=1 => không hiển thị aim canvas cho mọi type
+            DisableAllAimCanvases();
         }
 
         int skillType = GetSkillTypeForSkillId(skill);
@@ -570,16 +572,14 @@ public class PlayerMove : MonoBehaviour
 
         if (useServerAuto && controller != null)
         {
-            // Click nhanh: server sẽ tự chọn hướng/target => client không lấy joystick aim
             chosenWorldDir = controller.transform.forward;
             chosenWorldDir.y = 0f;
             if (chosenWorldDir.sqrMagnitude > 0.0001f) chosenWorldDir.Normalize();
 
-            // Giữ dir/target = 0 để server auto hoàn toàn
             dirX = 0; dirY = 0;
             targetX = 0; targetY = 0;
 
-            manualAim = true; // để không chạy các block aim phía dưới
+            manualAim = true;
         }
 
         if (!isGroundAOE && hasAimOverride && aimOverrideWorldDir.sqrMagnitude > 0.0001f)
@@ -818,7 +818,6 @@ public class PlayerMove : MonoBehaviour
                     look.y = 0f;
                     controller.transform.rotation = Quaternion.LookRotation(look);
 
-                    // ★ đảm bảo UI aim cũng theo server
                     if (SkillCastProtocol33.UsesDirection(pendingAim.typeSkill) && pendingAim.dir.sqrMagnitude > 0.0001f)
                         ApplyAutoAimToAimCanvases_Rotate(pendingAim.dir);
 
@@ -855,11 +854,9 @@ public class PlayerMove : MonoBehaviour
         if (cfg == null) return;
         if (cfg.skillObject == null) return;
 
-        // ★ Dùng client config để check type 5, vì server có thể gửi typeSkill khác
         int clientType = GetSkillTypeForSkillId(currentSkillIndex);
         if (clientType == SkillCastProtocol33.TYPE_LINE_2)
         {
-            // Ưu tiên dir từ server nếu có, fallback sang info.dir
             Vector3 dashDir = info.dir;
             dashDir.y = 0f;
             if (dashDir.sqrMagnitude < 0.0001f && info.hasTarget)
@@ -885,7 +882,6 @@ public class PlayerMove : MonoBehaviour
             return;
         }
 
-        // --- Giữ nguyên code cũ bên dưới ---
         ComputeServerVisual(info, out Vector3 origin, out Vector3 dst, out Vector3 dir, out Quaternion rot, out bool needMove);
 
         bool usesTarget = SkillCastProtocol33.UsesTargetPos(info.typeSkill);
@@ -952,7 +948,6 @@ public class PlayerMove : MonoBehaviour
 
         if (controller == null) return;
 
-        // ★ TYPE 5: Dash player đến đích, sau đó mới spawn skill
         if (currentSkillCfg == cfg && GetSkillTypeForSkillId(currentSkillIndex) == SkillCastProtocol33.TYPE_LINE_2)
         {
             Vector3 dashDir = fallbackDir;
@@ -1455,16 +1450,25 @@ public class PlayerMove : MonoBehaviour
         return (!wasCasting && isSkillCasting);
     }
 
+    /// <summary>
+    /// Trả về tên folder audio của hero hiện tại dựa vào B.Instance.heroPlayer.
+    /// Tự động hỗ trợ tất cả hero thông qua B.Instance.GetNameTuong().
+    /// </summary>
     private string GetHeroKey()
     {
-        switch (MenuController.Instance?.localHeroType)
+        if (B.Instance == null) return null;
+
+        // heroPlayer là 0-based index, heroType = heroPlayer + 1
+        int heroType = B.Instance.heroPlayer + 1;
+        string name = B.Instance.GetNameTuong(heroType);
+
+        if (string.IsNullOrEmpty(name))
         {
-            case 1: return "Kayn";
-            case 2: return "Leona";
-            default:
-                Debug.LogWarning($"[Audio] Unknown heroType: {MenuController.Instance?.localHeroType}");
-                return null;
+            Debug.LogWarning($"[Audio] Unknown heroType: {heroType}");
+            return null;
         }
+
+        return name;
     }
 
     private void ApplyAutoAimToAimCanvases_Rotate(Vector3 worldDir)
@@ -1479,7 +1483,6 @@ public class PlayerMove : MonoBehaviour
             var msa = go.GetComponentInChildren<MobileSkillAim>(true);
             if (msa == null) continue;
 
-            // Không chặn theo enableRotateVisual, vì có canvas dùng logic rotate khác
             msa.SetAutoRotateWorldDir(worldDir);
         }
     }
@@ -1507,7 +1510,6 @@ public class PlayerMove : MonoBehaviour
     {
         if (lowHpVignette != null) return lowHpVignette;
 
-        // tìm cả inactive
         lowHpVignette = FindObjectOfType<LowHpVignetteController>(true);
         return lowHpVignette;
     }
@@ -1517,8 +1519,6 @@ public class PlayerMove : MonoBehaviour
         var v = GetLowHpVignette();
         if (v != null) v.PulseDamageOnce();
     }
-
-    // ─── TYPE 5: Player dash tới đích, rồi mới spawn skillObject ───────────────
 
     private IEnumerator CoType5DashThenSpawn(SkillConfig cfg, TranDauControl.SkillCastInfo info)
     {
@@ -1551,9 +1551,8 @@ public class PlayerMove : MonoBehaviour
         float timeout = Mathf.Max(0.5f, (range / speed) * 2f);
         float elapsed = 0f;
 
-        // Đếm số frame liên tiếp bị Sides collision
         int consecutiveSidesFrames = 0;
-        const int MAX_SIDES_FRAMES = 2; // chỉ cần 2 frame liên tiếp bị Sides → dừng ngay
+        const int MAX_SIDES_FRAMES = 2;
 
         string exitReason = "unknown";
 
@@ -1593,7 +1592,6 @@ public class PlayerMove : MonoBehaviour
 
             CollisionFlags flags = controller.Move(move);
 
-            // Nếu bị block ngang (Sides) → đếm frame liên tiếp
             bool hitSides = (flags & CollisionFlags.Sides) != 0;
             if (hitSides)
             {
@@ -1612,7 +1610,6 @@ public class PlayerMove : MonoBehaviour
             yield return null;
         }
 
-        // Snap nhẹ tới đích chỉ khi còn rất gần (không bị block)
         if (controller != null && controller.gameObject.activeInHierarchy)
         {
             Vector3 pos = controller.transform.position;
@@ -1629,7 +1626,6 @@ public class PlayerMove : MonoBehaviour
             }
         }
 
-        // Spawn skillObject tại vị trí thực tế của nhân vật
         if (cfg.skillObject != null && controller != null)
         {
             Vector3 spawnPos = controller.transform.position;
@@ -1640,7 +1636,6 @@ public class PlayerMove : MonoBehaviour
             cfg.skillObject.SetActive(true);
         }
 
-        // Reset combat state
         isSkillCasting = false;
         animator.SetBool("isSkill1", false);
         animator.SetBool("isSkill2", false);
