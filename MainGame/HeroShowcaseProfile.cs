@@ -14,13 +14,26 @@ public class HeroShowcaseProfile
     [System.Serializable]
     public struct ActionStep
     {
+        [Tooltip("Thời điểm bắt đầu step (giây)")]
         public float atTime;
-        public Pose pose;
+
+        [Header("Hero Transform")]
+        public Pose heroPose;
+
+        [Header("Camera Transform")]
+        public Pose cameraPose;
+
+        [Tooltip("Thời gian lerp sang pose này")]
         public float lerpTime;
     }
 
-    public Pose defaultPose;
+    [Header("Default Hero Pose")]
+    public Pose defaultHeroPose;
 
+    [Header("Default Camera Pose")]
+    public Pose defaultCameraPose;
+
+    [Header("Sequence Settings")]
     public float enterDelay;
     public float returnAtTime;
     public float returnLerpTime;

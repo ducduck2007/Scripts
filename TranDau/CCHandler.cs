@@ -47,7 +47,7 @@ public class CCHandler : MonoBehaviour
         if (_playerMove != null) _animator = _playerMove.animator;
         if (_playerOther != null) _animator = _playerOther.animator;
 
-        Debug.Log($"[CCHandler] Awake | go={gameObject.name} | playerMove={_playerMove != null} | playerOther={_playerOther != null} | animator={_animator != null}");
+        // Debug.Log($"[CCHandler] Awake | go={gameObject.name} | playerMove={_playerMove != null} | playerOther={_playerOther != null} | animator={_animator != null}");
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -56,7 +56,7 @@ public class CCHandler : MonoBehaviour
 
     public void ApplyCC(int ccType, float duration)
     {
-        Debug.Log($"[CCHandler] ApplyCC | go={gameObject.name} | ccType={ccType} | duration={duration}");
+        // Debug.Log($"[CCHandler] ApplyCC | go={gameObject.name} | ccType={ccType} | duration={duration}");
         switch (ccType)
         {
             case 1: ApplyStun(duration); break;
@@ -83,7 +83,7 @@ public class CCHandler : MonoBehaviour
 
     private IEnumerator CoStun(float duration)
     {
-        Debug.Log($"[CCHandler] CoStun START | go={gameObject.name} | duration={duration}");
+        // Debug.Log($"[CCHandler] CoStun START | go={gameObject.name} | duration={duration}");
         IsStunned = true;
 
         if (_playerMove != null)
@@ -94,17 +94,17 @@ public class CCHandler : MonoBehaviour
 
         if (_stunInstance != null) Destroy(_stunInstance);
 
-        Debug.Log($"[CCHandler] stunEffectPrefab={stunEffectPrefab} | transform={transform.position}");
+        // Debug.Log($"[CCHandler] stunEffectPrefab={stunEffectPrefab} | transform={transform.position}");
 
         if (stunEffectPrefab != null)
         {
             _stunInstance = Instantiate(stunEffectPrefab, transform.position, Quaternion.identity, transform);
-            Debug.Log($"[CCHandler] _stunInstance spawned={_stunInstance != null} | active={_stunInstance?.activeInHierarchy}");
+            // Debug.Log($"[CCHandler] _stunInstance spawned={_stunInstance != null} | active={_stunInstance?.activeInHierarchy}");
         }
 
         yield return new WaitForSeconds(duration);
 
-        Debug.Log($"[CCHandler] CoStun END | go={gameObject.name}");
+        // Debug.Log($"[CCHandler] CoStun END | go={gameObject.name}");
         IsStunned = false;
 
         if (_playerMove != null)
@@ -129,7 +129,7 @@ public class CCHandler : MonoBehaviour
 
     private IEnumerator CoKnockUp(float duration)
     {
-        Debug.Log($"[CCHandler] CoKnockUp START | go={gameObject.name} | duration={duration}");
+        // Debug.Log($"[CCHandler] CoKnockUp START | go={gameObject.name} | duration={duration}");
         IsKnockedUp = true;
 
         if (_playerMove != null)
@@ -142,7 +142,7 @@ public class CCHandler : MonoBehaviour
         if (knockUpEffectPrefab != null)
         {
             _knockUpInstance = Instantiate(knockUpEffectPrefab, transform.position, Quaternion.identity, transform);
-            Debug.Log($"[CCHandler] _knockUpInstance spawned={_knockUpInstance != null} | active={_knockUpInstance?.activeInHierarchy}");
+            // Debug.Log($"[CCHandler] _knockUpInstance spawned={_knockUpInstance != null} | active={_knockUpInstance?.activeInHierarchy}");
         }
 
         float elapsed = 0f;
@@ -165,7 +165,7 @@ public class CCHandler : MonoBehaviour
         final.y = startY;
         transform.position = final;
 
-        Debug.Log($"[CCHandler] CoKnockUp END | go={gameObject.name}");
+        // Debug.Log($"[CCHandler] CoKnockUp END | go={gameObject.name}");
         IsKnockedUp = false;
 
         if (_playerMove != null)
@@ -184,14 +184,14 @@ public class CCHandler : MonoBehaviour
 
     private void ApplySlow(float duration)
     {
-        Debug.Log($"[CCHandler] ApplySlow called | go={gameObject.name} | IsSlowed={IsSlowed} | _coSlow={_coSlow != null}");
+        // Debug.Log($"[CCHandler] ApplySlow called | go={gameObject.name} | IsSlowed={IsSlowed} | _coSlow={_coSlow != null}");
         if (_coSlow != null) StopCoroutine(_coSlow);
         _coSlow = StartCoroutine(CoSlow(duration));
     }
 
     private IEnumerator CoSlow(float duration)
     {
-        Debug.Log($"[CCHandler] CoSlow START | go={gameObject.name} | duration={duration}");
+        // Debug.Log($"[CCHandler] CoSlow START | go={gameObject.name} | duration={duration}");
 
         if (_playerMove == null && _playerOther == null)
         {
@@ -218,7 +218,7 @@ public class CCHandler : MonoBehaviour
         // Destroy instance cũ trước khi spawn mới — tránh leak khi server gửi nhiều lần
         if (_slowInstance != null)
         {
-            Debug.Log($"[CCHandler] CoSlow — destroy instance cũ trước khi spawn mới");
+            // Debug.Log($"[CCHandler] CoSlow — destroy instance cũ trước khi spawn mới");
             Destroy(_slowInstance);
             _slowInstance = null;
         }
@@ -226,7 +226,7 @@ public class CCHandler : MonoBehaviour
         if (slowEffectPrefab != null)
         {
             _slowInstance = Instantiate(slowEffectPrefab, transform.position, Quaternion.identity, transform);
-            Debug.Log($"[CCHandler] _slowInstance spawned={_slowInstance != null} | active={_slowInstance?.activeInHierarchy} | pos={_slowInstance?.transform.position}");
+            // Debug.Log($"[CCHandler] _slowInstance spawned={_slowInstance != null} | active={_slowInstance?.activeInHierarchy} | pos={_slowInstance?.transform.position}");
         }
         else
         {
@@ -235,7 +235,7 @@ public class CCHandler : MonoBehaviour
 
         yield return new WaitForSeconds(duration);
 
-        Debug.Log($"[CCHandler] CoSlow END | go={gameObject.name}");
+        // Debug.Log($"[CCHandler] CoSlow END | go={gameObject.name}");
 
         if (_playerMove != null)
             _playerMove.moveSpeed = _originalMoveSpeed;
@@ -281,22 +281,22 @@ public class CCHandler : MonoBehaviour
 
     private IEnumerator CoBleed(float duration)
     {
-        Debug.Log($"[CCHandler] CoBleed START | go={gameObject.name} | duration={duration}");
+        // Debug.Log($"[CCHandler] CoBleed START | go={gameObject.name} | duration={duration}");
         IsBleeding = true;
 
         if (_bleedInstance != null) Destroy(_bleedInstance);
 
-        Debug.Log($"[CCHandler] bleedEffectPrefab={bleedEffectPrefab} | transform={transform.position}");
+        // Debug.Log($"[CCHandler] bleedEffectPrefab={bleedEffectPrefab} | transform={transform.position}");
 
         if (bleedEffectPrefab != null)
         {
             _bleedInstance = Instantiate(bleedEffectPrefab, transform.position, Quaternion.identity, transform);
-            Debug.Log($"[CCHandler] _bleedInstance spawned={_bleedInstance != null} | active={_bleedInstance?.activeInHierarchy}");
+            // Debug.Log($"[CCHandler] _bleedInstance spawned={_bleedInstance != null} | active={_bleedInstance?.activeInHierarchy}");
         }
 
         yield return new WaitForSeconds(duration);
 
-        Debug.Log($"[CCHandler] CoBleed END | go={gameObject.name}");
+        // Debug.Log($"[CCHandler] CoBleed END | go={gameObject.name}");
         IsBleeding = false;
 
         if (_bleedInstance != null)
