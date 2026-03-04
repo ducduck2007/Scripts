@@ -224,7 +224,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
     public int ResolveAndCacheHeroType(long userId, int teamId, int snapshotHeroType)
     {
-        // ✅ Ưu tiên cache từ CMD43 — chỉ dùng snapshotHeroType nếu chưa có cache
         if (HeroTypeByUserId.TryGetValue(userId, out var cached) && cached > 0)
             return cached;
 
@@ -257,7 +256,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
             if (h == int.MinValue) h = 0;
             int idx = Mathf.Abs(h) % _availableHeroTypes.Count;
             return _availableHeroTypes[idx];
-            // ✅ KHÔNG CacheHeroType ở đây
         }
     }
 
@@ -318,11 +316,11 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         {
             if (i == B.Instance.heroPlayer)
             {
-                playerMoves[i].gameObject.SetActive(false); // tắt hẳn
+                playerMoves[i].gameObject.SetActive(false);
                 if (playerMoves[i].HealthBar != null)
-                    playerMoves[i].HealthBar.gameObject.SetActive(false); // ẩn tạm
+                    playerMoves[i].HealthBar.gameObject.SetActive(false);
                 if (playerMoves[i].controller != null)
-                    playerMoves[i].controller.enabled = false; // khóa tạm
+                    playerMoves[i].controller.enabled = false;
                 playerMoves[i].isInputLocked = true;
             }
             else
@@ -347,8 +345,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
         SendData.SendMessage(new Message(CMD.GET_CHI_SO_TUONG));
         Debug.Log("[TranDauControl] Đã gửi GetChiSoTuong sau khi scene Play sẵn sàng");
-        // StartCoroutine(CoSpawnEffectThenReveal());
-        // MatchStartGate.TryHideLoading();
         StartCoroutine(CoWaitForServerThenReveal());
         Debug.Log($"[TranDauControl] Start() done, _waitingForServer={WaitingForServer}, heroPlayer={B.Instance.heroPlayer}");
 
@@ -361,7 +357,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
         if (_skipIntroThisPlay)
         {
-            // ✅ reconnect: vào là chiến luôn
             RevealImmediateNoIntro();
             MatchStartGate.TryHideLoading();
             yield break;
@@ -379,21 +374,18 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         if (GameTimerManager.Instance != null)
             GameTimerManager.Instance.StartTimer();
 
-        // ✅ đặt vị trí đúng theo B.Instance trước
         pm.SetPotion();
 
         Vector3 pos = (pm.controller != null)
             ? pm.controller.transform.position
             : new Vector3(B.Instance.PosX, 0f, B.Instance.PosZ);
 
-        // ✅ camera follow ngay, không intro
         if (cameraF != null)
         {
             cameraF.SetTarget(pm.transform);
             cameraF.SnapToGameplayPosition(pos);
         }
 
-        // ✅ bật nhân vật + mở input ngay
         pm.gameObject.SetActive(true);
 
         if (pm.controller != null)
@@ -1150,7 +1142,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
         if (othersByUserId.TryGetValue(userId, out var existing) && existing != null)
         {
-            // ✅ So sánh với heroType thực tế đã spawn trên prefab, không dùng dict
             int existingHeroType = existing.spawnedHeroType;
 
             if (existingHeroType > 0 && heroType > 0 && existingHeroType != heroType)
@@ -1158,7 +1149,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
                 Destroy(existing.gameObject);
                 othersByUserId.Remove(userId);
                 playersByUserId.Remove(userId);
-                // tiếp tục xuống để tạo mới
             }
             else
             {
@@ -1188,7 +1178,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         }
 
         var po = Instantiate(prefab, Vector3.zero, Quaternion.identity);
-        po.spawnedHeroType = resolvedHeroType; // ✅ lưu lại heroType thực tế
+        po.spawnedHeroType = resolvedHeroType;
 
         if (othersContainer != null)
             po.transform.SetParent(othersContainer, false);
@@ -1351,20 +1341,16 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         if (GameTimerManager.Instance != null)
             GameTimerManager.Instance.StartTimer();
 
-        // ✅ Gọi SetPotion TRƯỚC để đặt controller đúng vị trí từ B.Instance
         pm.SetPotion();
 
-        // ✅ Đọc vị trí THỰC TẾ từ controller sau khi SetPotion (không dùng B.Instance trực tiếp)
         Vector3 pos = (pm.controller != null)
             ? pm.controller.transform.position
             : new Vector3(B.Instance.PosX, 0f, B.Instance.PosZ);
 
-        // Spawn hiệu ứng
         GameObject effectInstance = null;
         if (spawnEffectPrefab != null)
             effectInstance = Instantiate(spawnEffectPrefab, pos, Quaternion.identity);
 
-        // Camera bay intro — set target trước để tính end pos
         cameraF.SetTarget(pm.transform);
         cameraF.PlayIntroFlyTo(spawnEffectDuration, pos);
 
@@ -1373,7 +1359,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         if (effectInstance != null)
             Destroy(effectInstance);
 
-        // Bật nhân vật (SetPotion đã gọi ở trên rồi, không cần gọi lại)
         pm.gameObject.SetActive(true);
         pm.isInputLocked = false;
 
@@ -1386,12 +1371,11 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         if (userId <= 0 || correctHeroType <= 0) return;
 
         if (!othersByUserId.TryGetValue(userId, out var existing) || existing == null)
-            return; // chưa spawn, không cần làm gì
+            return;
 
         if (existing.spawnedHeroType == correctHeroType)
-            return; // đã đúng
+            return;
 
-        // Lưu lại trạng thái cần thiết trước khi destroy
         bool wasActive = existing.gameObject.activeSelf;
         int savedTeamId = existing.teamId;
         Vector3 savedPos = existing.transform.position;
@@ -1401,7 +1385,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         othersByUserId.Remove(userId);
         playersByUserId.Remove(userId);
 
-        // Tạo lại với heroType đúng
         var po = GetOrCreateOther(userId, correctHeroType);
         if (po == null) return;
 
@@ -1410,7 +1393,6 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         int layer = LayerMask.NameToLayer(savedTeamId == 1 ? "player1" : "player2");
         po.gameObject.layer = layer;
 
-        // Đặt vị trí về chỗ cũ
         po.transform.position = savedPos;
 
         if (wasActive)

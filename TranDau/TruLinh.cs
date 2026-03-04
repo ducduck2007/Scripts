@@ -226,7 +226,6 @@ public class TruLinh : MonoBehaviour
     {
         if (hpMax <= 0) return;
 
-        // Clamp HP để tránh âm / vượt max
         hp = Mathf.Clamp(hp, 0, hpMax);
 
         int prev = currentHP;
@@ -234,9 +233,6 @@ public class TruLinh : MonoBehaviour
         currentHP = hp;
         maxHP = hpMax;
 
-        // ===== FIX RECONNECT =====
-        // Nếu lần đầu nhận HP từ server mà HP đã = 0 => trụ thường phải biến mất ngay
-        // (case reconnect: prefab spawn lại nhưng server nói trụ đã chết)
         if (!hasHpFromServer && currentHP <= 0)
         {
             if (!IsMainTurret)
@@ -245,7 +241,6 @@ public class TruLinh : MonoBehaviour
             }
             else
             {
-                // main turret: vẫn cập nhật UI để EndGameFlow xử lý
                 hasHpFromServer = true;
                 SetHpUIVisible(true);
                 if (txtHP != null) txtHP.text = currentHP.ToString();
@@ -254,7 +249,6 @@ public class TruLinh : MonoBehaviour
             return;
         }
 
-        // Trường hợp object spawn ra mà đã chết sẵn trên server (giữ lại cho chắc)
         if (prev < 0 && currentHP <= 0)
         {
             if (!IsMainTurret)
@@ -283,7 +277,6 @@ public class TruLinh : MonoBehaviour
         if (txtHP != null)
             txtHP.text = currentHP.ToString();
 
-        // Auto death CHỈ áp dụng cho trụ thường, không áp dụng cho trụ main
         if (!IsMainTurret && prev > 0 && currentHP <= 0 && !isDying)
             OnDeath();
     }
@@ -293,11 +286,9 @@ public class TruLinh : MonoBehaviour
         if (isDying) return;
         isDying = true;
 
-        // Tắt attack & vùng phạm vi
         attackLine?.gameObject.SetActive(false);
         if (phamVi != null) phamVi.SetActive(false);
 
-        // Âm thanh death
         if (AudioManager.Instance != null)
         {
             string soundPath = IsMainTurret
@@ -310,40 +301,31 @@ public class TruLinh : MonoBehaviour
 
         DOVirtual.DelayedCall(deathEffectDelay, () =>
         {
-            // Hiệu ứng vỡ trụ
             if (prefabNotru != null)
                 Instantiate(prefabNotru, t.position, t.rotation);
 
             Vector3 startPos = t.position;
             Vector3 startRot = t.eulerAngles;
 
-            // Tất cả trụ đều tụt xuống theo Y
             Vector3 targetPos = startPos + new Vector3(0f, deathMoveY, 0f);
 
-            // Khác nhau ở trục xoay:
-            // - Trụ main (id 18, 19): xoay theo Y
-            // - Trụ thường: xoay theo Z
             Vector3 targetRot;
             if (IsMainTurret)
             {
-                // Xoay quanh trục Y
                 targetRot = startRot + new Vector3(0f, deathRotateZ, 0f);
             }
             else
             {
-                // Xoay quanh trục Z (như hiệu ứng cũ của các trụ bé)
                 targetRot = startRot + new Vector3(0f, 0f, deathRotateZ);
             }
 
             Sequence seq = DOTween.Sequence();
 
-            // Move xuống
             seq.Join(
                 t.DOMove(targetPos, deathTweenDuration)
                  .SetEase(Ease.InQuad)
             );
 
-            // Xoay theo trục tương ứng
             seq.Join(
                 t.DORotate(targetRot, deathTweenDuration, RotateMode.Fast)
                  .SetEase(Ease.InQuad)

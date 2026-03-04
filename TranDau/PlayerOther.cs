@@ -897,8 +897,6 @@ public class PlayerOther : MonoBehaviour
         catch { return 0; }
     }
 
-    // ───────────────── COMBAT AUDIO ─────────────────
-
     private string GetHeroKey()
     {
         if (B.Instance == null || spawnedHeroType <= 0) return null;
@@ -924,7 +922,6 @@ public class PlayerOther : MonoBehaviour
 
         if (!isSkill)
         {
-            // đánh thường: phát audio_normal_attack theo hero, fallback sang NormalAttack chung
             if (!string.IsNullOrEmpty(heroKey))
             {
                 AudioClip naClip = Resources.Load<AudioClip>($"AudioTuong/{heroKey}/Skills/audio_normal_attack");
@@ -946,10 +943,8 @@ public class PlayerOther : MonoBehaviour
         {
             if (!string.IsNullOrEmpty(heroKey))
             {
-                // voice spellcast
                 PlayRandomClipFromFolder($"AudioTuong/{heroKey}/Voices", "spellcast");
 
-                // âm thanh skill theo slot
                 string skFile = skillSlot switch { 1 => "audio_sk1", 2 => "audio_sk2", 3 => "audio_sk3", _ => "" };
                 if (!string.IsNullOrEmpty(skFile))
                 {

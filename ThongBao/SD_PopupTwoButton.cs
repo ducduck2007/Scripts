@@ -15,8 +15,10 @@ public class SD_PopupTwoButton : BaseDialog
     private IEnumerator ieCountDown;
     private bool _isProcessCountDown;
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake();
+
         if (btnOk != null)
             btnOk.onClick.AddListener(ClickOk);
 

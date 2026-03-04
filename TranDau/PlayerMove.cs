@@ -536,7 +536,6 @@ public class PlayerMove : MonoBehaviour
 
         currentSkillIndex = skill;
 
-        // ── Phát âm thanh skill theo hero ──
         string heroKeySk = GetHeroKey();
         if (!string.IsNullOrEmpty(heroKeySk))
         {
@@ -955,7 +954,6 @@ public class PlayerMove : MonoBehaviour
             return;
         }
 
-        // Có target → luôn spawn tại target
         if (target != null)
         {
             spawnPos = target.position;
@@ -963,18 +961,15 @@ public class PlayerMove : MonoBehaviour
             return;
         }
 
-        // Không có target
         switch (attackOriginType)
         {
             case AttackOriginType.Weapon:
-                // Spawn ngay tại player
                 spawnPos = controller.transform.position;
                 spawnRot = controller.transform.rotation;
                 break;
 
             case AttackOriginType.Unarmed:
             default:
-                // Như hiện tại: spawn phía trước theo attackRange
                 spawnPos = controller.transform.position
                            + controller.transform.forward * fallbackRange;
                 spawnRot = controller.transform.rotation;

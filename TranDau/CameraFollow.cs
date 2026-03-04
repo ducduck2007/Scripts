@@ -46,7 +46,6 @@ public class CameraFollow : MonoBehaviour
     private Vector3 lastMousePos;
     private float currentDynamicRotationX;
 
-    // Intro state
     private bool _isPlayingIntro = false;
     private float _introDuration = 0f;
     private float _introElapsed = 0f;
@@ -122,13 +121,11 @@ public class CameraFollow : MonoBehaviour
 
         if (t <= orbitEnd)
         {
-            // ===== PHASE 1: Orbit quanh vị trí spawn =====
             float orbitT = t / orbitEnd;
             float easedT = EaseInOutCustom(orbitT, introEaseInPower, introEaseOutPower);
 
             float angle = (introStartAngle + easedT * introOrbitDegrees) * Mathf.Deg2Rad;
 
-            // Bán kính và độ cao thu nhỏ dần → zoom in effect
             float radius = Mathf.Lerp(introOrbitRadius, introOrbitRadius * 0.7f, easedT);
             float height = Mathf.Lerp(introOrbitHeight, introOrbitHeight * 0.85f, easedT);
 
@@ -141,15 +138,13 @@ public class CameraFollow : MonoBehaviour
             transform.position = pos;
             transform.LookAt(_introOrbitCenter + Vector3.up * 10f);
 
-            // Snapshot cuối orbit để settle mượt
             _orbitLastPos = transform.position;
             _orbitLastRot = transform.rotation;
         }
         else
         {
-            // ===== PHASE 2: Settle vào vị trí follow gameplay =====
             float settleT = (t - orbitEnd) / (1f - orbitEnd);
-            float easedSettle = settleT * settleT * (3f - 2f * settleT); // smoothstep
+            float easedSettle = settleT * settleT * (3f - 2f * settleT);
 
             transform.position = Vector3.Lerp(_orbitLastPos, _introEndPos, easedSettle);
             transform.rotation = Quaternion.Slerp(_orbitLastRot, Quaternion.Euler(_introEndRot), easedSettle);
@@ -281,17 +276,13 @@ public class CameraFollow : MonoBehaviour
 
     public void SnapToGameplayPosition(Vector3 focusPos)
     {
-        // ✅ hủy intro nếu đang chạy
         _isPlayingIntro = false;
 
-        // ✅ follow ngay
         isFollow = true;
 
-        // set rotation theo lane default (giống SetTarget)
         transform.rotation = Quaternion.Euler(midLaneRotationX, baseRotationY, baseRotationZ);
         currentDynamicRotationX = midLaneRotationX;
 
-        // tính đúng vị trí camera gameplay theo offset hiện tại
         Vector3 desiredPos = focusPos
                              + transform.right * offset.x
                              + Vector3.up * offset.y
