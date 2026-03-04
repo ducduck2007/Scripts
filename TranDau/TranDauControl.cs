@@ -224,14 +224,15 @@ public class TranDauControl : ManualSingleton<TranDauControl>
 
     public int ResolveAndCacheHeroType(long userId, int teamId, int snapshotHeroType)
     {
+        // ✅ Ưu tiên cache từ CMD43 — chỉ dùng snapshotHeroType nếu chưa có cache
+        if (HeroTypeByUserId.TryGetValue(userId, out var cached) && cached > 0)
+            return cached;
+
         if (snapshotHeroType > 0)
         {
             CacheHeroType(userId, snapshotHeroType);
             return snapshotHeroType;
         }
-
-        if (HeroTypeByUserId.TryGetValue(userId, out var cached) && cached > 0)
-            return cached;
 
         long myId = UserData.Instance != null ? UserData.Instance.UserID : 0;
         if (myId != 0 && userId == myId)
@@ -255,9 +256,8 @@ public class TranDauControl : ManualSingleton<TranDauControl>
             h = (h * 16777619) ^ (teamId * 374761393);
             if (h == int.MinValue) h = 0;
             int idx = Mathf.Abs(h) % _availableHeroTypes.Count;
-            int ht = _availableHeroTypes[idx];
-            // ✅ KHÔNG gọi CacheHeroType ở đây — tránh ghi đè cache đúng bằng giá trị tạm
-            return ht;
+            return _availableHeroTypes[idx];
+            // ✅ KHÔNG CacheHeroType ở đây
         }
     }
 
@@ -344,6 +344,9 @@ public class TranDauControl : ManualSingleton<TranDauControl>
         RefreshTargetCache();
         PlayLoadGate.MarkReady();
         PlayLoadGate.FlushTo(this);
+
+        SendData.SendMessage(new Message(CMD.GET_CHI_SO_TUONG));
+        Debug.Log("[TranDauControl] Đã gửi GetChiSoTuong sau khi scene Play sẵn sàng");
         // StartCoroutine(CoSpawnEffectThenReveal());
         // MatchStartGate.TryHideLoading();
         StartCoroutine(CoWaitForServerThenReveal());
@@ -940,6 +943,7 @@ public class TranDauControl : ManualSingleton<TranDauControl>
             obj = minion.gameObject;
             obj.transform.position = spawnPos;
             obj.transform.rotation = Quaternion.identity;
+            minion.ResetForReuse();
             obj.SetActive(true);
         }
         else

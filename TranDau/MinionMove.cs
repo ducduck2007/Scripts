@@ -1,3 +1,4 @@
+using System.Collections;
 using DG.Tweening;
 using TMPro;
 using UnityEngine;
@@ -32,6 +33,15 @@ public class MinionMove : MonoBehaviour
     private float _attackHoldUntil = 0f;
     private bool _atkWanted = false;
 
+    [Header("Combat Audio")]
+    [SerializeField] private float hearRadius = 400f;
+    private AudioSource combatAudioSource;
+    private float _nextAttackSoundTime = 0f;
+    private const float ATTACK_SOUND_INTERVAL = 0.5f;
+
+    private static int _activeSoundCount = 0;
+    private const int MAX_CONCURRENT_MINION_SOUNDS = 3;
+
     private Vector3 _fromPos;
     private Vector3 _toPos;
     private float _interpT;
@@ -54,6 +64,7 @@ public class MinionMove : MonoBehaviour
         {
             SetAnimatorSpeed(0f);
             SetAnimatorAttack(true);
+            PlayMinionAttackSound();
             if (sqrDist > 0.001f)
             {
                 Quaternion targetRot = Quaternion.LookRotation(dir);
@@ -103,6 +114,20 @@ public class MinionMove : MonoBehaviour
 
         if (imgFill != null && sprMau != null && sprMau.Length >= 2)
             imgFill.sprite = (teamId == B.Instance.teamId) ? sprMau[0] : sprMau[1];
+
+        InitCombatAudioSource();
+    }
+
+    private void InitCombatAudioSource()
+    {
+        if (combatAudioSource != null) return; // đã init rồi thì thôi
+        combatAudioSource = gameObject.AddComponent<AudioSource>();
+        combatAudioSource.spatialBlend = 1f;
+        combatAudioSource.minDistance = 50f;
+        combatAudioSource.maxDistance = hearRadius;
+        combatAudioSource.rolloffMode = AudioRolloffMode.Logarithmic;
+        combatAudioSource.playOnAwake = false;
+        combatAudioSource.loop = false;
     }
 
     float lastHpPercent = -1f;
@@ -190,5 +215,58 @@ public class MinionMove : MonoBehaviour
             if (Time.time >= _attackHoldUntil)
                 _atkWanted = false;
         }
+    }
+
+    private bool IsPlayerMoveInHearRange()
+    {
+        if (TranDauControl.Instance == null) return false;
+        var pm = TranDauControl.Instance.playerMove;
+        if (pm == null || pm.controller == null) return false;
+        float distSqr = (transform.position - pm.controller.transform.position).sqrMagnitude;
+        return distSqr <= hearRadius * hearRadius;
+    }
+
+    private void PlayMinionAttackSound()
+    {
+        if (combatAudioSource == null) return;
+        if (!AudioManager.Instance.GetSoundConfig()) return;
+        if (!IsPlayerMoveInHearRange()) return;
+        if (Time.time < _nextAttackSoundTime) return;
+
+        // Giới hạn số âm thanh đồng thời toàn map
+        if (_activeSoundCount >= MAX_CONCURRENT_MINION_SOUNDS) return;
+
+        AudioClip clip = Resources.Load<AudioClip>(PathAudio.MinionAttack);
+        if (clip == null) return;
+
+        _activeSoundCount++;
+        combatAudioSource.PlayOneShot(clip);
+        _nextAttackSoundTime = Time.time + ATTACK_SOUND_INTERVAL;
+
+        // Giảm counter sau khi clip phát xong
+        StartCoroutine(DecrementSoundCountAfter(clip.length));
+    }
+
+    private IEnumerator DecrementSoundCountAfter(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        _activeSoundCount = Mathf.Max(0, _activeSoundCount - 1);
+    }
+
+    public void ResetForReuse()
+    {
+        isAlive = true;
+        _interpT = 1f;          // không lerp từ vị trí cũ
+        _atkWanted = false;
+        _attackHoldUntil = 0f;
+        lastHpPercent = -1f;
+        lastSpeed = -1f;
+        lastAttack = false;
+
+        hpTween?.Kill();
+        hpTween = null;
+
+        if (imgFill != null) imgFill.enabled = false;
+        if (txtHP != null) txtHP.enabled = false;
     }
 }

@@ -3,133 +3,167 @@ using UnityEngine;
 
 public class HeroShowcase2D : MonoBehaviour
 {
-    const string HERO_CAMERA_NAME = "HeroCamera";
-
-    Transform heroCamera;
-    Coroutine introCo;
-
-    // ==============================
-    // CINEMATIC CONFIG
-    // ==============================
-
-    const float INTRO_DURATION = 3.5f;
-    const float ORBIT_RADIUS_MULTIPLIER = 1.25f;
-    const float LOW_HEIGHT_RATIO = -0.35f;
-    const float HIGH_HEIGHT_RATIO = 0.25f;
-    const float RESET_DURATION = 0.6f;
-
-    // ==============================
-
     [Header("Animator Idle")]
     public string idleBoolParam = "isIdle";
+    public bool setIdleTrueWhenDone = true;
+    public bool setIdleFalseOnStart = true;
+
+    [Header("Idle Transition")]
     public float idleTransitionDelay = 0.08f;
     public float idleCrossFadeDuration = 0.25f;
     public string idleStateName = "";
 
-    // ==============================
+    [Header("Debug Pause")]
+    [Tooltip("Bật để tự động dừng animation tại pauseAtTime giây")]
+    public bool autoPauseEnabled = false;
+    [Tooltip("Dừng tại giây này kể từ lúc bắt đầu chuỗi steps")]
+    public float pauseAtTime = 5.5f;
 
-    void EnsureCamera()
+    Transform _target;
+    HeroShowcaseProfile _profile;
+    Coroutine _co;
+    bool _paused = false;
+
+    public void PlayFor(Transform target, HeroShowcaseProfile profile)
     {
-        if (heroCamera != null) return;
+        if (target == null || profile == null) return;
 
-        var camObj = GameObject.Find(HERO_CAMERA_NAME);
-        if (camObj != null)
-            heroCamera = camObj.transform;
-        else
-            Debug.LogWarning("Không tìm thấy HeroCamera");
+        // Stop sequence cũ
+        if (_co != null) { StopCoroutine(_co); _co = null; }
+
+        // Trả lại swipe của hero cũ (nếu đang tắt)
+        if (_target != null)
+            SetSwipe(_target, true);
+
+        // Reset animator + pose hero cũ
+        if (_target != null && _profile != null)
+        {
+            var oldAnim = _target.GetComponentInChildren<Animator>(true);
+            if (oldAnim != null) oldAnim.speed = 1f;
+
+            ApplyPose(_target, _profile.defaultPose);
+        }
+
+        _target = target;
+        _profile = profile;
+        _paused = false;
+
+        // Đảm bảo animator hero mới chạy bình thường
+        var newAnim = _target.GetComponentInChildren<Animator>(true);
+        if (newAnim != null) newAnim.speed = 1f;
+
+        if (setIdleFalseOnStart)
+            SetIdle(_target, false);
+
+        // Apply default pose trước
+        ApplyPose(_target, _profile.defaultPose);
+
+        // ✅ FIX DỨT ĐIỂM:
+        // Trong lúc showcase chạy LerpPose, tắt SwipeRotateCharacter để không tranh quyền set localRotation
+        SetSwipe(_target, false);
+
+        _co = StartCoroutine(CoRunOnce());
     }
 
-    public void PlayFor(Transform hero)
+    IEnumerator CoRunOnce()
     {
-        if (hero == null) return;
+        if (_target == null || _profile == null) yield break;
 
-        EnsureCamera();
-        if (heroCamera == null) return;
+        if (_profile.enterDelay > 0f)
+            yield return WaitRealtime(_profile.enterDelay);
 
-        if (introCo != null)
-            StopCoroutine(introCo);
+        var prev = _profile.defaultPose;
 
-        introCo = StartCoroutine(CoCinematicIntro(hero));
+        if (_profile.steps != null && _profile.steps.Length > 0)
+        {
+            float elapsed = 0f;
+
+            Coroutine autoPauseCo = null;
+            if (autoPauseEnabled && pauseAtTime >= 0f)
+                autoPauseCo = StartCoroutine(CoAutoPause(pauseAtTime));
+
+            for (int i = 0; i < _profile.steps.Length; i++)
+            {
+                if (_target == null) yield break;
+
+                var s = _profile.steps[i];
+                float waitTime = s.atTime - elapsed;
+                if (waitTime > 0f)
+                {
+                    elapsed += waitTime;
+                    yield return WaitRealtime(waitTime);
+                }
+
+                yield return LerpPose(prev, s.pose, Mathf.Max(0f, s.lerpTime));
+                elapsed += Mathf.Max(0f, s.lerpTime);
+                prev = s.pose;
+            }
+
+            float waitToReturn = _profile.returnAtTime - elapsed;
+            if (waitToReturn > 0f)
+                yield return WaitRealtime(waitToReturn);
+
+            yield return LerpPose(prev, _profile.defaultPose, Mathf.Max(0f, _profile.returnLerpTime));
+
+            if (autoPauseCo != null) StopCoroutine(autoPauseCo);
+        }
+
+        if (setIdleTrueWhenDone)
+            yield return TransitionToIdle(_target);
+
+        // ✅ Bật lại swipe sau khi showcase kết thúc + rebase theo rotation hiện tại
+        SetSwipe(_target, true);
+
+        _co = null;
     }
 
-    IEnumerator CoCinematicIntro(Transform hero)
+    IEnumerator CoAutoPause(float pauseAt)
     {
-        Renderer r = hero.GetComponentInChildren<Renderer>();
-        if (r == null) yield break;
+        yield return new WaitForSecondsRealtime(pauseAt);
+        _paused = true;
 
-        Bounds b = r.bounds;
-        Vector3 center = b.center;
-        float height = b.size.y;
+        if (_target != null)
+        {
+            var anim = _target.GetComponentInChildren<Animator>(true);
+            if (anim != null) anim.speed = 0f;
+        }
+    }
 
-        float distance = height * ORBIT_RADIUS_MULTIPLIER;
+    IEnumerator WaitRealtime(float duration)
+    {
+        float acc = 0f;
+        while (acc < duration)
+        {
+            yield return null;
+            if (!_paused)
+                acc += Time.unscaledDeltaTime;
+        }
+    }
 
-        Vector3 heroForward = hero.forward;
-        Vector3 heroRight = hero.right;
+    IEnumerator LerpPose(HeroShowcaseProfile.Pose a, HeroShowcaseProfile.Pose b, float duration)
+    {
+        if (_target == null) yield break;
+
+        if (duration <= 0f) { ApplyPose(_target, b); yield break; }
 
         float elapsed = 0f;
 
-        while (elapsed < INTRO_DURATION)
+        while (elapsed < duration)
         {
-            elapsed += Time.unscaledDeltaTime;
-            float t = Mathf.Clamp01(elapsed / INTRO_DURATION);
-
-            float eased = t * t * (3f - 2f * t);
-
-            float angle = Mathf.Lerp(-140f, 130f, eased);
-            float rad = angle * Mathf.Deg2Rad;
-
-            float heightOffset = Mathf.Lerp(
-                height * LOW_HEIGHT_RATIO,
-                height * HIGH_HEIGHT_RATIO,
-                eased
-            );
-
-            Vector3 offset =
-                heroRight * Mathf.Sin(rad) * distance +
-                heroForward * Mathf.Cos(rad) * distance;
-
-            Vector3 camPos = center + offset + Vector3.up * heightOffset;
-
-            heroCamera.position = camPos;
-
-            Quaternion lookRot = Quaternion.LookRotation(center - camPos);
-            heroCamera.rotation = Quaternion.Slerp(
-                heroCamera.rotation,
-                lookRot,
-                8f * Time.unscaledDeltaTime
-            );
+            if (_target == null) yield break;
 
             yield return null;
+
+            if (!_paused)
+                elapsed += Time.unscaledDeltaTime;
+
+            float k = Smooth(Mathf.Clamp01(elapsed / duration));
+            _target.localPosition = Vector3.LerpUnclamped(a.localPosition, b.localPosition, k);
+            _target.localRotation = Quaternion.Euler(Vector3.LerpUnclamped(a.localEuler, b.localEuler, k));
+            _target.localScale = Vector3.one * Mathf.LerpUnclamped(a.uniformScale, b.uniformScale, k);
         }
 
-        yield return StartCoroutine(CoSmoothReset());
-
-        // Set isIdle sau khi camera về xong
-        yield return TransitionToIdle(hero);
-
-        introCo = null;
-    }
-
-    IEnumerator CoSmoothReset()
-    {
-        if (heroCamera == null) yield break;
-
-        Vector3 startPos = heroCamera.position;
-        Quaternion startRot = heroCamera.rotation;
-
-        float t = 0f;
-        while (t < RESET_DURATION)
-        {
-            t += Time.unscaledDeltaTime;
-            float k = Mathf.SmoothStep(0f, 1f, t / RESET_DURATION);
-            heroCamera.position = Vector3.Lerp(startPos, Vector3.zero, k);
-            heroCamera.rotation = Quaternion.Slerp(startRot, Quaternion.identity, k);
-            yield return null;
-        }
-
-        heroCamera.position = Vector3.zero;
-        heroCamera.rotation = Quaternion.identity;
-        heroCamera.localScale = Vector3.one;
+        ApplyPose(_target, b);
     }
 
     IEnumerator TransitionToIdle(Transform t)
@@ -137,7 +171,7 @@ public class HeroShowcase2D : MonoBehaviour
         if (t == null) yield break;
 
         if (idleTransitionDelay > 0f)
-            yield return new WaitForSecondsRealtime(idleTransitionDelay);
+            yield return WaitRealtime(idleTransitionDelay);
 
         var anim = t.GetComponentInChildren<Animator>(true);
         if (anim != null)
@@ -150,13 +184,64 @@ public class HeroShowcase2D : MonoBehaviour
         }
     }
 
-    public void ForceReset()
+    static void ApplyPose(Transform t, HeroShowcaseProfile.Pose p)
     {
-        EnsureCamera();
+        if (t == null) return;
+        t.localPosition = p.localPosition;
+        t.localRotation = Quaternion.Euler(p.localEuler);
+        t.localScale = Vector3.one * p.uniformScale;
+    }
 
-        if (introCo != null)
-            StopCoroutine(introCo);
+    void SetIdle(Transform t, bool val)
+    {
+        if (t == null) return;
+        var anim = t.GetComponentInChildren<Animator>(true);
+        if (anim == null) return;
+        try { anim.SetBool(idleBoolParam, val); } catch { }
+    }
 
-        introCo = StartCoroutine(CoSmoothReset());
+    static float Smooth(float x) { x = Mathf.Clamp01(x); return x * x * (3f - 2f * x); }
+
+    SwipeRotateCharacter FindSwipe(Transform t)
+    {
+        if (t == null) return null;
+        return t.GetComponentInChildren<SwipeRotateCharacter>(true);
+    }
+
+    void SetSwipe(Transform t, bool enabled)
+    {
+        var s = FindSwipe(t);
+        if (s == null) return;
+
+        s.enabled = enabled;
+
+        if (enabled)
+            s.RebaseToCurrent();
+    }
+
+    public void ForceIdle(Transform target, bool idle = true)
+    {
+        if (target == null) return;
+
+        // Stop sequence cũ nếu có
+        if (_co != null) { StopCoroutine(_co); _co = null; }
+        _paused = false;
+
+        // Trả swipe của hero cũ
+        if (_target != null)
+            SetSwipe(_target, true);
+
+        _target = target;
+        _profile = null;
+
+        // đảm bảo animator chạy
+        var anim = _target.GetComponentInChildren<Animator>(true);
+        if (anim != null) anim.speed = 1f;
+
+        // set bool isIdle
+        SetIdle(_target, idle);
+
+        // bật swipe lại (nếu có)
+        SetSwipe(_target, true);
     }
 }

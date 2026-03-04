@@ -10,6 +10,12 @@ public class PlayerMove : MonoBehaviour
     private float turnSpeed = 10f;
     private float rotateSpeed = 10f;
 
+    public enum AttackOriginType
+    {
+        Unarmed,   // Đánh tay không (như hiện tại)
+        Weapon     // Cầm vũ khí (spawn tại player)
+    }
+
     [Header("Refs")]
     public Animator animator;
     public CharacterController controller;
@@ -61,11 +67,12 @@ public class PlayerMove : MonoBehaviour
     [Header("Normal Attack")]
     public NormalAttackConfig normalAttackConfig = new NormalAttackConfig();
 
+    [Header("Attack Origin")]
+    public AttackOriginType attackOriginType = AttackOriginType.Unarmed;
+
     [Header("Auto Aim (Click-only Rotate skills)")]
     [SerializeField] private bool enableAutoAimClickOnlyRotate = true;
-
     [SerializeField] private float autoAimPrimaryRange = 0f;
-
     [SerializeField] private float autoAimExpandMultiplier = 1.8f;
 
     private static readonly Collider[] _autoAimHits = new Collider[64];
@@ -163,10 +170,8 @@ public class PlayerMove : MonoBehaviour
     public void DisableAllAimCanvases()
     {
         if (aimCanvasesByType != null)
-        {
             for (int i = 0; i < aimCanvasesByType.Length; i++)
                 if (aimCanvasesByType[i] != null) aimCanvasesByType[i].SetActive(false);
-        }
     }
 
     public GameObject GetAimCanvasByType(int type)
@@ -242,14 +247,9 @@ public class PlayerMove : MonoBehaviour
         if (normalAttackConfig.attackObject != null)
             normalAttackConfig.attackObject.SetActive(false);
 
-        if (skill1?.skillObject != null)
-            skill1.skillObject.SetActive(false);
-
-        if (skill2?.skillObject != null)
-            skill2.skillObject.SetActive(false);
-
-        if (skill3?.skillObject != null)
-            skill3.skillObject.SetActive(false);
+        if (skill1?.skillObject != null) skill1.skillObject.SetActive(false);
+        if (skill2?.skillObject != null) skill2.skillObject.SetActive(false);
+        if (skill3?.skillObject != null) skill3.skillObject.SetActive(false);
     }
 
     private void Update()
@@ -342,13 +342,16 @@ public class PlayerMove : MonoBehaviour
 
         if (!isAlive || IsBusy() || isInputLocked) return;
 
-        // Phát voice effort + sound đánh thường cho tất cả hero
         string heroKey = GetHeroKey();
         if (!string.IsNullOrEmpty(heroKey))
         {
             AudioManager.Instance.PlayHeroSound(heroKey, AudioManager.HeroSoundType.Effort);
+            AudioManager.Instance.PlayHeroSkillSound(heroKey, 0);
         }
-        AudioManager.Instance.AudioNormalAttack();
+        else
+        {
+            AudioManager.Instance.AudioNormalAttack();
+        }
 
         ShowNormalAttackRangeOnce();
         SendData.SendAttack(0, 3, controller.transform.position, 0);
@@ -472,11 +475,7 @@ public class PlayerMove : MonoBehaviour
             if (t == null || !t.gameObject.activeInHierarchy) continue;
 
             float sqr = (t.position - origin).sqrMagnitude;
-            if (sqr < best)
-            {
-                best = sqr;
-                nearest = t;
-            }
+            if (sqr < best) { best = sqr; nearest = t; }
             _autoAimHits[i] = null;
         }
 
@@ -497,12 +496,7 @@ public class PlayerMove : MonoBehaviour
         {
             Vector3 d = t1.position - origin;
             d.y = 0f;
-            if (d.sqrMagnitude > 0.0001f)
-            {
-                chosenDir = d.normalized;
-                aimTarget = t1;
-                return true;
-            }
+            if (d.sqrMagnitude > 0.0001f) { chosenDir = d.normalized; aimTarget = t1; return true; }
         }
 
         if (expandedRange > primaryRange + 0.01f)
@@ -511,12 +505,7 @@ public class PlayerMove : MonoBehaviour
             {
                 Vector3 d = t2.position - origin;
                 d.y = 0f;
-                if (d.sqrMagnitude > 0.0001f)
-                {
-                    chosenDir = d.normalized;
-                    aimTarget = t2;
-                    return true;
-                }
+                if (d.sqrMagnitude > 0.0001f) { chosenDir = d.normalized; aimTarget = t2; return true; }
             }
         }
 
@@ -539,26 +528,25 @@ public class PlayerMove : MonoBehaviour
                 normalAttackConfig.attackObject.SetActive(false);
 
             animator.SetBool("isAttack", false);
-
             isNormalAttacking = false;
         }
 
-        currentSkillCfg = skill switch
-        {
-            1 => skill1,
-            2 => skill2,
-            3 => skill3,
-            _ => null
-        };
+        currentSkillCfg = skill switch { 1 => skill1, 2 => skill2, 3 => skill3, _ => null };
         if (currentSkillCfg == null) return;
 
         currentSkillIndex = skill;
+
+        // ── Phát âm thanh skill theo hero ──
+        string heroKeySk = GetHeroKey();
+        if (!string.IsNullOrEmpty(heroKeySk))
+        {
+            AudioManager.Instance.PlayHeroSound(heroKeySk, AudioManager.HeroSoundType.Effort);
+            AudioManager.Instance.PlayHeroSkillSound(heroKeySk, skill);
+        }
+
         bool useServerAuto = (autoFlag == 1);
 
-        if (useServerAuto)
-        {
-            DisableAllAimCanvases();
-        }
+        if (useServerAuto) DisableAllAimCanvases();
 
         int skillType = GetSkillTypeForSkillId(skill);
         bool isGroundAOE = (skillType == 3);
@@ -575,23 +563,16 @@ public class PlayerMove : MonoBehaviour
             chosenWorldDir = controller.transform.forward;
             chosenWorldDir.y = 0f;
             if (chosenWorldDir.sqrMagnitude > 0.0001f) chosenWorldDir.Normalize();
-
-            dirX = 0; dirY = 0;
-            targetX = 0; targetY = 0;
-
+            dirX = 0; dirY = 0; targetX = 0; targetY = 0;
             manualAim = true;
         }
 
         if (!isGroundAOE && hasAimOverride && aimOverrideWorldDir.sqrMagnitude > 0.0001f)
         {
-            Vector3 d = aimOverrideWorldDir;
-            d.y = 0f;
-            d.Normalize();
+            Vector3 d = aimOverrideWorldDir; d.y = 0f; d.Normalize();
             chosenWorldDir = d;
-
             EncodeDirForServer(d, out dirX, out dirY);
             manualAim = true;
-
             hasAimOverride = false;
             aimOverrideWorldDir = Vector3.zero;
         }
@@ -622,11 +603,7 @@ public class PlayerMove : MonoBehaviour
                             ok = true;
                         }
 
-                        if (ok)
-                        {
-                            useGroundTarget = true;
-                            break;
-                        }
+                        if (ok) { useGroundTarget = true; break; }
                     }
                 }
             }
@@ -634,14 +611,11 @@ public class PlayerMove : MonoBehaviour
             if (useGroundTarget && controller != null)
             {
                 Vector3 origin = controller.transform.position;
-                Vector3 d = groundTargetWorld - origin;
-                d.y = 0f;
+                Vector3 d = groundTargetWorld - origin; d.y = 0f;
                 if (d.sqrMagnitude > 0.0001f) d.Normalize();
                 chosenWorldDir = d;
-
                 EncodeDirForServer(d, out dirX, out dirY);
                 manualAim = true;
-
                 SkillCastProtocol33.UnityToServerPos(groundTargetWorld, out targetX, out targetY);
             }
         }
@@ -653,42 +627,20 @@ public class PlayerMove : MonoBehaviour
 
             if (TryFindNearestEnemyNonAlloc(controller.transform.position, primary, out var t1) && t1 != null)
             {
-                Vector3 enemyPos = t1.position;
-                enemyPos.y = 0f;
-
+                Vector3 enemyPos = t1.position; enemyPos.y = 0f;
                 if (!useServerAuto) ApplyAutoAimToAimCanvases_AOE(enemyPos);
-
                 SkillCastProtocol33.UnityToServerPos(enemyPos, out targetX, out targetY);
-
-                Vector3 d = enemyPos - controller.transform.position;
-                d.y = 0f;
-                if (d.sqrMagnitude > 0.0001f)
-                {
-                    chosenWorldDir = d.normalized;
-                    EncodeDirForServer(chosenWorldDir, out dirX, out dirY);
-                    manualAim = true;
-                }
-
+                Vector3 d = enemyPos - controller.transform.position; d.y = 0f;
+                if (d.sqrMagnitude > 0.0001f) { chosenWorldDir = d.normalized; EncodeDirForServer(chosenWorldDir, out dirX, out dirY); manualAim = true; }
                 target = t1;
             }
             else if (TryFindNearestEnemyNonAlloc(controller.transform.position, expanded, out var t2) && t2 != null)
             {
-                Vector3 enemyPos = t2.position;
-                enemyPos.y = 0f;
-
+                Vector3 enemyPos = t2.position; enemyPos.y = 0f;
                 if (!useServerAuto) ApplyAutoAimToAimCanvases_AOE(enemyPos);
-
                 SkillCastProtocol33.UnityToServerPos(enemyPos, out targetX, out targetY);
-
-                Vector3 d = enemyPos - controller.transform.position;
-                d.y = 0f;
-                if (d.sqrMagnitude > 0.0001f)
-                {
-                    chosenWorldDir = d.normalized;
-                    EncodeDirForServer(chosenWorldDir, out dirX, out dirY);
-                    manualAim = true;
-                }
-
+                Vector3 d = enemyPos - controller.transform.position; d.y = 0f;
+                if (d.sqrMagnitude > 0.0001f) { chosenWorldDir = d.normalized; EncodeDirForServer(chosenWorldDir, out dirX, out dirY); manualAim = true; }
                 target = t2;
             }
         }
@@ -696,12 +648,7 @@ public class PlayerMove : MonoBehaviour
         if (!manualAim)
         {
             Vector2 input = Vector2.zero;
-            try
-            {
-                if (MenuController.Instance?.joystick != null)
-                    input = MenuController.Instance.joystick.inputVector;
-            }
-            catch { }
+            try { if (MenuController.Instance?.joystick != null) input = MenuController.Instance.joystick.inputVector; } catch { }
 
             if (input.magnitude > 0.1f)
             {
@@ -722,14 +669,11 @@ public class PlayerMove : MonoBehaviour
                 chosenWorldDir = autoDir;
                 EncodeDirForServer(chosenWorldDir, out dirX, out dirY);
                 manualAim = true;
-
                 if (!useServerAuto) ApplyAutoAimToAimCanvases_Rotate(chosenWorldDir);
-
                 if (autoTarget != null)
                 {
                     if (targetX == 0 && targetY == 0)
                         SkillCastProtocol33.UnityToServerPos(autoTarget.position, out targetX, out targetY);
-
                     target = autoTarget;
                 }
             }
@@ -737,8 +681,7 @@ public class PlayerMove : MonoBehaviour
 
         if (!manualAim && controller != null)
         {
-            Vector3 f = controller.transform.forward;
-            f.y = 0f;
+            Vector3 f = controller.transform.forward; f.y = 0f;
             f = f.sqrMagnitude > 0.0001f ? f.normalized : Vector3.forward;
             chosenWorldDir = f;
             EncodeDirForServer(chosenWorldDir, out dirX, out dirY);
@@ -747,10 +690,7 @@ public class PlayerMove : MonoBehaviour
         if (!manualAim && targetX == 0 && targetY == 0)
         {
             FindTargetInRange(normalAttackConfig.attackRange);
-            if (target != null)
-            {
-                SkillCastProtocol33.UnityToServerPos(target.position, out targetX, out targetY);
-            }
+            if (target != null) SkillCastProtocol33.UnityToServerPos(target.position, out targetX, out targetY);
         }
 
         DisableAllAimCanvases();
@@ -759,13 +699,9 @@ public class PlayerMove : MonoBehaviour
             SendData.SendCastSkill(skill, dirX, dirY, targetX, targetY, controller.transform.position, autoFlag);
 
         if (chosenWorldDir.sqrMagnitude > 0.0001f && controller != null)
-        {
             controller.transform.rotation = Quaternion.LookRotation(chosenWorldDir);
-        }
         else if (!manualAim && target != null)
-        {
             RotateToTarget();
-        }
 
         isSkillCasting = true;
         animator.SetFloat("Speed", 0f);
@@ -789,10 +725,7 @@ public class PlayerMove : MonoBehaviour
     {
         yield return new WaitForSeconds(cfg.delaySpawn);
 
-        if (cfg.skillObject == null)
-        {
-            yield break;
-        }
+        if (cfg.skillObject == null) yield break;
 
         float t = 0f;
         while (t < waitServerAimTimeout)
@@ -800,8 +733,7 @@ public class PlayerMove : MonoBehaviour
             if (hasPendingServerAim)
             {
                 bool isMatch = true;
-                try { isMatch = (pendingAim.skillId == skillIndex); }
-                catch { }
+                try { isMatch = (pendingAim.skillId == skillIndex); } catch { }
                 if (isMatch) break;
             }
             t += Time.deltaTime;
@@ -814,8 +746,7 @@ public class PlayerMove : MonoBehaviour
             {
                 if (controller != null && pendingAim.dir.sqrMagnitude > 0.0001f)
                 {
-                    Vector3 look = pendingAim.dir;
-                    look.y = 0f;
+                    Vector3 look = pendingAim.dir; look.y = 0f;
                     controller.transform.rotation = Quaternion.LookRotation(look);
 
                     if (SkillCastProtocol33.UsesDirection(pendingAim.typeSkill) && pendingAim.dir.sqrMagnitude > 0.0001f)
@@ -840,42 +771,26 @@ public class PlayerMove : MonoBehaviour
     private IEnumerator CoShowSkillFallbackAfterDelay(SkillConfig cfg, Vector3 fallbackDir)
     {
         yield return new WaitForSeconds(cfg.delaySpawn);
-
-        if (cfg.skillObject == null)
-        {
-            yield break;
-        }
-
+        if (cfg.skillObject == null) yield break;
         ShowSkillFallback(cfg, fallbackDir);
     }
 
     private void ShowSkillByServerAim(SkillConfig cfg, TranDauControl.SkillCastInfo info)
     {
-        if (cfg == null) return;
-        if (cfg.skillObject == null) return;
+        if (cfg == null || cfg.skillObject == null) return;
 
         int clientType = GetSkillTypeForSkillId(currentSkillIndex);
         if (clientType == SkillCastProtocol33.TYPE_LINE_2)
         {
-            Vector3 dashDir = info.dir;
-            dashDir.y = 0f;
-            if (dashDir.sqrMagnitude < 0.0001f && info.hasTarget)
-            {
-                dashDir = info.targetPos - info.origin;
-                dashDir.y = 0f;
-            }
-            if (dashDir.sqrMagnitude < 0.0001f && controller != null)
-            {
-                dashDir = controller.transform.forward;
-                dashDir.y = 0f;
-            }
+            Vector3 dashDir = info.dir; dashDir.y = 0f;
+            if (dashDir.sqrMagnitude < 0.0001f && info.hasTarget) { dashDir = info.targetPos - info.origin; dashDir.y = 0f; }
+            if (dashDir.sqrMagnitude < 0.0001f && controller != null) { dashDir = controller.transform.forward; dashDir.y = 0f; }
             if (dashDir.sqrMagnitude > 0.0001f) dashDir.Normalize();
 
             var dashInfo = info;
             dashInfo.dir = dashDir;
             dashInfo.typeSkill = SkillCastProtocol33.TYPE_LINE_2;
-            if (dashInfo.maxRange <= 0.01f)
-                dashInfo.maxRange = normalAttackConfig.attackRange;
+            if (dashInfo.maxRange <= 0.01f) dashInfo.maxRange = normalAttackConfig.attackRange;
 
             if (_activeSkillMoveCo != null) StopCoroutine(_activeSkillMoveCo);
             _activeSkillMoveCo = StartCoroutine(CoType5DashThenSpawn(cfg, dashInfo));
@@ -910,17 +825,14 @@ public class PlayerMove : MonoBehaviour
         out Vector3 dir, out Quaternion rot, out bool needMove)
     {
         origin = info.origin;
-
         bool usesDir = SkillCastProtocol33.UsesDirection(info.typeSkill);
         bool usesTarget = SkillCastProtocol33.UsesTargetPos(info.typeSkill);
 
-        dir = info.dir;
-        dir.y = 0f;
+        dir = info.dir; dir.y = 0f;
 
         if (dir.sqrMagnitude < 0.0001f && info.hasTarget)
         {
-            Vector3 d = info.targetPos - origin;
-            d.y = 0f;
+            Vector3 d = info.targetPos - origin; d.y = 0f;
             if (d.sqrMagnitude > 0.0001f) dir = d.normalized;
         }
 
@@ -930,33 +842,21 @@ public class PlayerMove : MonoBehaviour
             ? Quaternion.LookRotation(dir)
             : (controller != null ? controller.transform.rotation : Quaternion.identity);
 
-        if (usesTarget && info.hasTarget)
-            dst = info.targetPos;
-        else if (usesDir && dir.sqrMagnitude > 0.0001f && info.maxRange > 0.01f)
-            dst = origin + dir * info.maxRange;
-        else
-            dst = origin;
+        if (usesTarget && info.hasTarget) dst = info.targetPos;
+        else if (usesDir && dir.sqrMagnitude > 0.0001f && info.maxRange > 0.01f) dst = origin + dir * info.maxRange;
+        else dst = origin;
 
         needMove = (usesTarget || (usesDir && info.maxRange > 0.01f));
     }
 
     private void ShowSkillFallback(SkillConfig cfg, Vector3 fallbackDir)
     {
-        if (cfg == null) return;
-
-        if (cfg.skillObject == null) return;
-
-        if (controller == null) return;
+        if (cfg == null || cfg.skillObject == null || controller == null) return;
 
         if (currentSkillCfg == cfg && GetSkillTypeForSkillId(currentSkillIndex) == SkillCastProtocol33.TYPE_LINE_2)
         {
-            Vector3 dashDir = fallbackDir;
-            dashDir.y = 0f;
-            if (dashDir.sqrMagnitude < 0.0001f)
-            {
-                dashDir = controller.transform.forward;
-                dashDir.y = 0f;
-            }
+            Vector3 dashDir = fallbackDir; dashDir.y = 0f;
+            if (dashDir.sqrMagnitude < 0.0001f) { dashDir = controller.transform.forward; dashDir.y = 0f; }
             if (dashDir.sqrMagnitude > 0.0001f) dashDir.Normalize();
 
             var fakeInfo = new TranDauControl.SkillCastInfo
@@ -974,15 +874,8 @@ public class PlayerMove : MonoBehaviour
             return;
         }
 
-        Vector3 dir = fallbackDir;
-        dir.y = 0f;
-
-        if (dir.sqrMagnitude < 0.0001f)
-        {
-            dir = controller.transform.forward;
-            dir.y = 0f;
-        }
-
+        Vector3 dir = fallbackDir; dir.y = 0f;
+        if (dir.sqrMagnitude < 0.0001f) { dir = controller.transform.forward; dir.y = 0f; }
         if (dir.sqrMagnitude > 0.0001f) dir.Normalize();
 
         Vector3 origin = controller.transform.position;
@@ -1006,8 +899,7 @@ public class PlayerMove : MonoBehaviour
             yield return null;
         }
 
-        if (obj != null)
-            obj.SetActive(false);
+        if (obj != null) obj.SetActive(false);
     }
 
     private void EndSkillAnimationWrapper()
@@ -1030,12 +922,7 @@ public class PlayerMove : MonoBehaviour
         if (controller == null) return;
 
         int count = Physics.OverlapSphereNonAlloc(
-            controller.transform.position,
-            range,
-            _findTargetHits,
-            enemyLayer,
-            QueryTriggerInteraction.Ignore
-        );
+            controller.transform.position, range, _findTargetHits, enemyLayer, QueryTriggerInteraction.Ignore);
 
         target = null;
         float minDist = Mathf.Infinity;
@@ -1044,14 +931,8 @@ public class PlayerMove : MonoBehaviour
         {
             var h = _findTargetHits[i];
             if (h == null) continue;
-
             float d = Vector3.Distance(controller.transform.position, h.transform.position);
-            if (d < minDist)
-            {
-                minDist = d;
-                target = h.transform;
-            }
-
+            if (d < minDist) { minDist = d; target = h.transform; }
             _findTargetHits[i] = null;
         }
     }
@@ -1059,40 +940,53 @@ public class PlayerMove : MonoBehaviour
     private void RotateToTarget()
     {
         if (target == null || controller == null) return;
-
-        Vector3 dir = target.position - controller.transform.position;
-        dir.y = 0f;
+        Vector3 dir = target.position - controller.transform.position; dir.y = 0f;
         if (dir.sqrMagnitude < 0.01f) return;
-
         Quaternion targetRot = Quaternion.LookRotation(dir);
         controller.transform.rotation = Quaternion.Slerp(controller.transform.rotation, targetRot, rotateSpeed * Time.deltaTime);
     }
 
     private void GetTargetSpawn(out Vector3 spawnPos, out Quaternion spawnRot, float fallbackRange)
     {
+        if (controller == null)
+        {
+            spawnPos = Vector3.zero;
+            spawnRot = Quaternion.identity;
+            return;
+        }
+
+        // Có target → luôn spawn tại target
         if (target != null)
         {
             spawnPos = target.position;
             spawnRot = Quaternion.LookRotation(target.position - controller.transform.position);
+            return;
         }
-        else
+
+        // Không có target
+        switch (attackOriginType)
         {
-            spawnPos = controller.transform.position + controller.transform.forward * fallbackRange;
-            spawnRot = controller.transform.rotation;
+            case AttackOriginType.Weapon:
+                // Spawn ngay tại player
+                spawnPos = controller.transform.position;
+                spawnRot = controller.transform.rotation;
+                break;
+
+            case AttackOriginType.Unarmed:
+            default:
+                // Như hiện tại: spawn phía trước theo attackRange
+                spawnPos = controller.transform.position
+                           + controller.transform.forward * fallbackRange;
+                spawnRot = controller.transform.rotation;
+                break;
         }
     }
 
     private void Move()
     {
-        if (!isAlive || controller == null || !controller.enabled || !controller.gameObject.activeInHierarchy)
-            return;
+        if (!isAlive || controller == null || !controller.enabled || !controller.gameObject.activeInHierarchy) return;
 
-        if (IsInCombatState())
-        {
-            HandleCombatMovement();
-            return;
-        }
-
+        if (IsInCombatState()) { HandleCombatMovement(); return; }
         HandleNormalMovement();
     }
 
@@ -1108,7 +1002,6 @@ public class PlayerMove : MonoBehaviour
     private void HandleNormalMovement()
     {
         if (TranDauControl.WaitingForServer) return;
-
         if (controller == null) return;
 
         Vector2 input = MenuController.Instance.joystick.inputVector;
@@ -1125,14 +1018,8 @@ public class PlayerMove : MonoBehaviour
             controller.Move(controller.transform.forward * moveSpeed * Time.deltaTime);
         }
 
-        if (controller.isGrounded)
-        {
-            if (velocity.y < 0f) velocity.y = -2f;
-        }
-        else
-        {
-            velocity.y += gravity * Time.deltaTime;
-        }
+        if (controller.isGrounded) { if (velocity.y < 0f) velocity.y = -2f; }
+        else velocity.y += gravity * Time.deltaTime;
 
         controller.Move(Vector3.up * velocity.y * Time.deltaTime);
 
@@ -1175,10 +1062,8 @@ public class PlayerMove : MonoBehaviour
         try
         {
             float ratio = hpMax <= 0f ? 0f : (hpCurrent / hpMax);
-            if (hpCurrent < hpMax)
-                HealthBar.SetProgress(ratio, 30);
-            else
-                HealthBar.SetProgress(1f, 100);
+            if (hpCurrent < hpMax) HealthBar.SetProgress(ratio, 30);
+            else HealthBar.SetProgress(1f, 100);
         }
         catch { }
     }
@@ -1188,20 +1073,14 @@ public class PlayerMove : MonoBehaviour
     private void SafeSetThanhMau(int type)
     {
         if (ShouldUseHealthBar() && HealthBar != null)
-        {
-            try { HealthBar.SetThanhMau(type); }
-            catch { }
-        }
+            try { HealthBar.SetThanhMau(type); } catch { }
     }
 
     private void SafeSetHealthBarActive(bool active)
     {
         if (!ShouldUseHealthBar()) active = false;
         if (HealthBar != null)
-        {
-            try { HealthBar.gameObject.SetActive(active); }
-            catch { }
-        }
+            try { HealthBar.gameObject.SetActive(active); } catch { }
     }
 
     private bool IsBusy() => isNormalAttacking || isSkillCasting;
@@ -1214,10 +1093,7 @@ public class PlayerMove : MonoBehaviour
         SetAnimatorSpeed(input.magnitude > 0.1f ? 1f : 0f);
     }
 
-    private void SetAnimatorSpeed(float speed)
-    {
-        animator.SetFloat("Speed", speed);
-    }
+    private void SetAnimatorSpeed(float speed) => animator.SetFloat("Speed", speed);
 
     private void ResetAllAnimatorStates()
     {
@@ -1287,19 +1163,15 @@ public class PlayerMove : MonoBehaviour
     private void ForceShowText(TMP_Text txt)
     {
         if (txt == null) return;
-
         Transform p = txt.transform;
         while (p != null)
         {
             if (!p.gameObject.activeSelf) p.gameObject.SetActive(true);
-
             var cg = p.GetComponent<CanvasGroup>();
             if (cg != null && cg.alpha <= 0.001f) cg.alpha = 1f;
-
             if (p.localScale.sqrMagnitude < 0.0001f) p.localScale = Vector3.one;
             p = p.parent;
         }
-
         if (!txt.gameObject.activeSelf) txt.gameObject.SetActive(true);
         txt.enabled = true;
     }
@@ -1336,16 +1208,8 @@ public class PlayerMove : MonoBehaviour
             rt.anchoredPosition = pos;
 
             float s;
-            if (u < 0.35f)
-            {
-                float k = u / 0.35f;
-                s = Mathf.Lerp(startScale, peakScale, 1f - Mathf.Pow(1f - k, 3f));
-            }
-            else
-            {
-                float k = (u - 0.35f) / 0.65f;
-                s = Mathf.Lerp(peakScale, endScale, k);
-            }
+            if (u < 0.35f) { float k = u / 0.35f; s = Mathf.Lerp(startScale, peakScale, 1f - Mathf.Pow(1f - k, 3f)); }
+            else { float k = (u - 0.35f) / 0.65f; s = Mathf.Lerp(peakScale, endScale, k); }
             rt.localScale = Vector3.one * s;
 
             float alphaIn = Mathf.Clamp01(u / 0.12f);
@@ -1372,19 +1236,12 @@ public class PlayerMove : MonoBehaviour
 
         if (canvas != null && canvas.renderMode == RenderMode.WorldSpace)
         {
-            world = rt.position;
-            world.y = 0f;
-            return true;
+            world = rt.position; world.y = 0f; return true;
         }
 
         Camera cam = null;
-
-        if (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceCamera)
-            cam = canvas.worldCamera;
-
-        if (cam == null)
-            cam = Camera.main;
-
+        if (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceCamera) cam = canvas.worldCamera;
+        if (cam == null) cam = Camera.main;
         if (cam == null) return false;
 
         Vector3 screen = RectTransformUtility.WorldToScreenPoint(cam, rt.position);
@@ -1392,18 +1249,11 @@ public class PlayerMove : MonoBehaviour
 
         if (Physics.Raycast(ray, out RaycastHit hit, 50000f, ~0, QueryTriggerInteraction.Ignore))
         {
-            world = hit.point;
-            world.y = 0f;
-            return true;
+            world = hit.point; world.y = 0f; return true;
         }
 
         Plane p = new Plane(Vector3.up, Vector3.zero);
-        if (p.Raycast(ray, out float enter))
-        {
-            world = ray.GetPoint(enter);
-            world.y = 0f;
-            return true;
-        }
+        if (p.Raycast(ray, out float enter)) { world = ray.GetPoint(enter); world.y = 0f; return true; }
 
         return false;
     }
@@ -1411,13 +1261,7 @@ public class PlayerMove : MonoBehaviour
     private void EncodeDirForServer(Vector3 worldDir, out int dirX, out int dirY)
     {
         worldDir.y = 0f;
-        if (worldDir.sqrMagnitude < 0.0001f)
-        {
-            dirX = 0;
-            dirY = 0;
-            return;
-        }
-
+        if (worldDir.sqrMagnitude < 0.0001f) { dirX = 0; dirY = 0; return; }
         worldDir.Normalize();
         dirX = Mathf.RoundToInt(worldDir.x * 100f);
         dirY = Mathf.RoundToInt(worldDir.z * 100f);
@@ -1431,16 +1275,10 @@ public class PlayerMove : MonoBehaviour
             long myId = UserData.Instance.UserID;
             return B.Instance.GetSkillType(myId, skillId);
         }
-        catch
-        {
-            return 0;
-        }
+        catch { return 0; }
     }
 
-    public int GetSkillTypeForSkillId_Public(int skillId)
-    {
-        return GetSkillTypeForSkillId(skillId);
-    }
+    public int GetSkillTypeForSkillId_Public(int skillId) => GetSkillTypeForSkillId(skillId);
 
     public bool TryCastSkill(int skill, int autoFlag = 0)
     {
@@ -1450,39 +1288,24 @@ public class PlayerMove : MonoBehaviour
         return (!wasCasting && isSkillCasting);
     }
 
-    /// <summary>
-    /// Trả về tên folder audio của hero hiện tại dựa vào B.Instance.heroPlayer.
-    /// Tự động hỗ trợ tất cả hero thông qua B.Instance.GetNameTuong().
-    /// </summary>
     private string GetHeroKey()
     {
         if (B.Instance == null) return null;
-
-        // heroPlayer là 0-based index, heroType = heroPlayer + 1
         int heroType = B.Instance.heroPlayer + 1;
         string name = B.Instance.GetNameTuong(heroType);
-
-        if (string.IsNullOrEmpty(name))
-        {
-            Debug.LogWarning($"[Audio] Unknown heroType: {heroType}");
-            return null;
-        }
-
+        if (string.IsNullOrEmpty(name)) { Debug.LogWarning($"[Audio] Unknown heroType: {heroType}"); return null; }
         return name;
     }
 
     private void ApplyAutoAimToAimCanvases_Rotate(Vector3 worldDir)
     {
         if (aimCanvasesByType == null) return;
-
         for (int i = 0; i < aimCanvasesByType.Length; i++)
         {
             var go = aimCanvasesByType[i];
             if (go == null) continue;
-
             var msa = go.GetComponentInChildren<MobileSkillAim>(true);
             if (msa == null) continue;
-
             msa.SetAutoRotateWorldDir(worldDir);
         }
     }
@@ -1490,18 +1313,13 @@ public class PlayerMove : MonoBehaviour
     private void ApplyAutoAimToAimCanvases_AOE(Vector3 worldPos)
     {
         if (aimCanvasesByType == null) return;
-
         for (int i = 0; i < aimCanvasesByType.Length; i++)
         {
             var go = aimCanvasesByType[i];
             if (go == null) continue;
-
             var msa = go.GetComponentInChildren<MobileSkillAim>(true);
             if (msa == null) continue;
-
-            if (!msa.enableGroundMove) continue;
-            if (msa.skillShotSmall == null) continue;
-
+            if (!msa.enableGroundMove || msa.skillShotSmall == null) continue;
             msa.SetAutoAOETargetWorld(worldPos, snapImmediately: true);
         }
     }
@@ -1509,7 +1327,6 @@ public class PlayerMove : MonoBehaviour
     private LowHpVignetteController GetLowHpVignette()
     {
         if (lowHpVignette != null) return lowHpVignette;
-
         lowHpVignette = FindObjectOfType<LowHpVignetteController>(true);
         return lowHpVignette;
     }
@@ -1526,86 +1343,49 @@ public class PlayerMove : MonoBehaviour
 
         if (controller == null || cfg == null) yield break;
 
-        Vector3 dir = info.dir;
-        dir.y = 0f;
-
-        if (dir.sqrMagnitude < 0.0001f)
-        {
-            dir = controller.transform.forward;
-            dir.y = 0f;
-        }
+        Vector3 dir = info.dir; dir.y = 0f;
+        if (dir.sqrMagnitude < 0.0001f) { dir = controller.transform.forward; dir.y = 0f; }
         if (dir.sqrMagnitude > 0.0001f) dir.Normalize();
 
         float range = info.maxRange > 0.01f ? info.maxRange : normalAttackConfig.attackRange;
         Vector3 startPos = controller.transform.position;
-        Vector3 destination = new Vector3(
-            startPos.x + dir.x * range,
-            startPos.y,
-            startPos.z + dir.z * range
-        );
+        Vector3 destination = new Vector3(startPos.x + dir.x * range, startPos.y, startPos.z + dir.z * range);
 
-        if (dir.sqrMagnitude > 0.0001f)
-            controller.transform.rotation = Quaternion.LookRotation(dir);
+        if (dir.sqrMagnitude > 0.0001f) controller.transform.rotation = Quaternion.LookRotation(dir);
 
         float speed = dashSpeedType5;
         float timeout = Mathf.Max(0.5f, (range / speed) * 2f);
         float elapsed = 0f;
-
         int consecutiveSidesFrames = 0;
         const int MAX_SIDES_FRAMES = 2;
-
         string exitReason = "unknown";
 
         while (controller != null && controller.enabled && controller.gameObject.activeInHierarchy)
         {
             elapsed += Time.deltaTime;
-
-            if (elapsed >= timeout)
-            {
-                exitReason = "TIMEOUT";
-                break;
-            }
+            if (elapsed >= timeout) { exitReason = "TIMEOUT"; break; }
 
             Vector3 current = controller.transform.position;
-            float distXZ = new Vector2(
-                destination.x - current.x,
-                destination.z - current.z
-            ).magnitude;
+            float distXZ = new Vector2(destination.x - current.x, destination.z - current.z).magnitude;
 
-            if (distXZ <= 0.2f)
-            {
-                exitReason = "REACHED_DEST";
-                break;
-            }
+            if (distXZ <= 0.2f) { exitReason = "REACHED_DEST"; break; }
 
             float stepDist = speed * Time.deltaTime;
             if (stepDist > distXZ) stepDist = distXZ;
 
             Vector3 move = new Vector3(dir.x * stepDist, 0f, dir.z * stepDist);
-
-            if (controller.isGrounded)
-                velocity.y = -2f;
-            else
-                velocity.y += gravity * Time.deltaTime;
-
+            if (controller.isGrounded) velocity.y = -2f;
+            else velocity.y += gravity * Time.deltaTime;
             move.y = velocity.y * Time.deltaTime;
 
             CollisionFlags flags = controller.Move(move);
-
             bool hitSides = (flags & CollisionFlags.Sides) != 0;
             if (hitSides)
             {
                 consecutiveSidesFrames++;
-                if (consecutiveSidesFrames >= MAX_SIDES_FRAMES)
-                {
-                    exitReason = "HIT_COLLIDER_SIDES";
-                    break;
-                }
+                if (consecutiveSidesFrames >= MAX_SIDES_FRAMES) { exitReason = "HIT_COLLIDER_SIDES"; break; }
             }
-            else
-            {
-                consecutiveSidesFrames = 0;
-            }
+            else consecutiveSidesFrames = 0;
 
             yield return null;
         }
@@ -1613,16 +1393,11 @@ public class PlayerMove : MonoBehaviour
         if (controller != null && controller.gameObject.activeInHierarchy)
         {
             Vector3 pos = controller.transform.position;
-            float remainDist = new Vector2(
-                destination.x - pos.x,
-                destination.z - pos.z
-            ).magnitude;
-
+            float remainDist = new Vector2(destination.x - pos.x, destination.z - pos.z).magnitude;
             if (remainDist < 1f)
             {
                 Vector3 snapDelta = new Vector3(destination.x - pos.x, 0f, destination.z - pos.z);
-                if (snapDelta.sqrMagnitude > 0.0001f)
-                    controller.Move(snapDelta);
+                if (snapDelta.sqrMagnitude > 0.0001f) controller.Move(snapDelta);
             }
         }
 

@@ -2,7 +2,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class EndGameCountdownUI : MonoBehaviour
+public class EndGameCountdownUI : ScaleScreen
 {
     public TMP_Text txtCountdown;
 
@@ -17,7 +17,10 @@ public class EndGameCountdownUI : MonoBehaviour
     // Gắn hàm này vào sự kiện OnClick của Button / Text
     public void OnClickExit()
     {
-        // CMD_GAME_END đã gọi CleanupUdpBeforeExit rồi, ở đây chỉ cần load lại scene
+        // Dừng nhạc trước khi load lại (AudioManager sẽ tự mở lại sau khi scene load xong)
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.StopAudioBg();
+
         SceneManager.LoadScene("Game");
     }
 }

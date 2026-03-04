@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class AudioManager : ManualSingleton<AudioManager>
 {
@@ -19,6 +20,24 @@ public class AudioManager : ManualSingleton<AudioManager>
     {
         SetUpMusicStartGame();
         SetUpSoundStartGame();
+    }
+
+    private void OnEnable()
+    {
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void OnDisable()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name == "Game")
+        {
+            PlayAudioBg();
+        }
     }
 
     private void SetUpMusicStartGame()
@@ -228,5 +247,37 @@ public class AudioManager : ManualSingleton<AudioManager>
     private static AudioClip LoadSound(string path)
     {
         return Resources.Load<AudioClip>(path);
+    }
+
+    public void PlayOneShotByPath(string resourcesPath)
+    {
+        if (!isSound) return;
+        AudioClip clip = Resources.Load<AudioClip>(resourcesPath);
+        if (clip != null) audioSound.PlayOneShot(clip);
+    }
+
+    /// <summary>
+    /// Phát âm thanh skill theo hero và slot.
+    /// skillSlot = 0: đánh thường, 1/2/3: skill tương ứng
+    /// </summary>
+    public void PlayHeroSkillSound(string heroFolder, int skillSlot)
+    {
+        if (!isSound) return;
+        if (string.IsNullOrEmpty(heroFolder)) return;
+
+        string fileName = skillSlot switch
+        {
+            0 => "audio_normal_attack",
+            1 => "audio_sk1",
+            2 => "audio_sk2",
+            3 => "audio_sk3",
+            _ => ""
+        };
+
+        if (string.IsNullOrEmpty(fileName)) return;
+
+        AudioClip clip = Resources.Load<AudioClip>($"AudioTuong/{heroFolder}/Skills/{fileName}");
+        if (clip != null)
+            audioSound.PlayOneShot(clip);
     }
 }

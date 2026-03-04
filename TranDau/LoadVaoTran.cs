@@ -14,9 +14,15 @@ public class LoadVaoTran : ScaleScreen
 
     [Header("Hero Avatars")]
     public Sprite[] heroAvatars;
+    public Sprite defaultAvatar;
 
     private Coroutine routine;
     private CanvasGroup _cg;
+
+    // ==============================
+    // TeamSize đọc trực tiếp từ runtime
+    // ==============================
+    private int TeamSize => Mathf.Clamp(MatchRuntime.TeamSize, 1, 5);
 
     protected override void OnEnable()
     {
@@ -25,7 +31,9 @@ public class LoadVaoTran : ScaleScreen
         if (_cg == null)
         {
             _cg = GetComponent<CanvasGroup>();
-            if (_cg == null) _cg = gameObject.AddComponent<CanvasGroup>();
+            if (_cg == null)
+                _cg = gameObject.AddComponent<CanvasGroup>();
+
             SetVisible(false);
         }
     }
@@ -33,6 +41,7 @@ public class LoadVaoTran : ScaleScreen
     private void SetVisible(bool val)
     {
         if (_cg == null) return;
+
         _cg.alpha = val ? 1f : 0f;
         _cg.interactable = val;
         _cg.blocksRaycasts = val;
@@ -58,10 +67,14 @@ public class LoadVaoTran : ScaleScreen
             if (PopupController.Instance != null)
                 PopupController.Instance.ChonTuong.Show(false);
 
+            ResetTeamsUI();
+
             if (data != null)
                 PopulateTeams(data);
 
-            if (routine != null) StopCoroutine(routine);
+            if (routine != null)
+                StopCoroutine(routine);
+
             routine = StartCoroutine(AnimateDots());
         }
         else
@@ -70,9 +83,55 @@ public class LoadVaoTran : ScaleScreen
         }
     }
 
+    // =====================================================
+    // RESET UI THEO MODE SERVER (CĂN GIỮA)
+    // =====================================================
+
+    private void ResetTeamsUI()
+    {
+        ResetTeamContainer(doiXanh);
+        ResetTeamContainer(doiDo);
+    }
+
+    private void ResetTeamContainer(Transform teamContainer)
+    {
+        if (teamContainer == null) return;
+
+        int totalSlots = teamContainer.childCount;
+        int startIndex = (totalSlots - TeamSize) / 2;
+        int endIndex = startIndex + TeamSize;
+
+        for (int i = 0; i < totalSlots; i++)
+        {
+            Transform item = teamContainer.GetChild(i);
+
+            bool active = (i >= startIndex && i < endIndex);
+            item.gameObject.SetActive(active);
+
+            if (active)
+                SetDefaultItem(item);
+        }
+    }
+
+    private void SetDefaultItem(Transform item)
+    {
+        var txtName = item.Find("txtName")?.GetComponent<TextMeshProUGUI>();
+        if (txtName != null)
+            txtName.text = "Đang chờ...";
+
+        var avatar = item.Find("AvatarTuong")?.GetComponent<Image>();
+        if (avatar != null)
+            avatar.sprite = defaultAvatar;
+    }
+
+    // =====================================================
+    // POPULATE DATA (CĂN GIỮA + MAP PLAYER)
+    // =====================================================
+
     public void PopulateTeams(LoadVaoTranData data)
     {
         if (data == null) return;
+
         SetupTeam(doiXanh, data.teamXanh);
         SetupTeam(doiDo, data.teamDo);
     }
@@ -81,56 +140,76 @@ public class LoadVaoTran : ScaleScreen
     {
         if (teamContainer == null) return;
 
-        int childCount = teamContainer.childCount;
-        int playerCount = players.Count;
-        int startIndex = (childCount - playerCount) / 2;
+        int totalSlots = teamContainer.childCount;
+        int startIndex = (totalSlots - TeamSize) / 2;
+        int endIndex = startIndex + TeamSize;
 
-        for (int i = 0; i < childCount; i++)
+        int playerCount = players.Count;
+        int playerIndex = 0;
+
+        for (int i = 0; i < totalSlots; i++)
         {
             Transform item = teamContainer.GetChild(i);
-            int playerIndex = i - startIndex;
 
-            if (playerIndex >= 0 && playerIndex < playerCount)
+            if (i < startIndex || i >= endIndex)
             {
-                item.gameObject.SetActive(true);
+                item.gameObject.SetActive(false);
+                continue;
+            }
+
+            item.gameObject.SetActive(true);
+
+            if (playerIndex < playerCount)
+            {
                 SetItemPlayer(item, players[playerIndex]);
+                playerIndex++;
             }
             else
             {
-                item.gameObject.SetActive(false);
+                SetDefaultItem(item);
             }
         }
     }
 
     private void SetItemPlayer(Transform item, LoadVaoTranData.PlayerEntry info)
     {
-        var txtName = item.Find("txtName");
+        var txtName = item.Find("txtName")?.GetComponent<TextMeshProUGUI>();
         if (txtName != null)
-        {
-            var tmp = txtName.GetComponent<TextMeshProUGUI>();
-            if (tmp != null) tmp.text = info.displayName;
-        }
+            txtName.text = info.displayName;
 
-        var avatarTuong = item.Find("AvatarTuong");
-        if (avatarTuong != null)
+        var avatar = item.Find("AvatarTuong")?.GetComponent<Image>();
+        if (avatar != null)
         {
-            var img = avatarTuong.GetComponent<Image>();
             int index = info.heroType - 1;
-            if (img != null && index >= 0 && index < heroAvatars.Length && heroAvatars[index] != null)
+
+            if (index >= 0 &&
+                index < heroAvatars.Length &&
+                heroAvatars[index] != null)
             {
-                img.sprite = heroAvatars[index];
+                avatar.sprite = heroAvatars[index];
+            }
+            else
+            {
+                avatar.sprite = defaultAvatar;
             }
         }
     }
 
+    // =====================================================
+    // LOADING DOTS
+    // =====================================================
+
     private IEnumerator AnimateDots()
     {
         int dotCount = 0;
+
         while (true)
         {
             dotCount = (dotCount + 1) % 4;
+
             if (loadingText != null)
                 loadingText.text = "Đang vào trận" + new string('.', dotCount);
+
             yield return new WaitForSeconds(0.4f);
         }
     }

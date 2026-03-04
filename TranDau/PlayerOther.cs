@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class PlayerOther : MonoBehaviour
 {
@@ -38,7 +39,11 @@ public class PlayerOther : MonoBehaviour
     public ProgressBar HealthBar;
 
     [Header("Canvas HP")]
-    public Canvas canvasHp; // ✅ Khai báo Canvas HP để kéo vào Inspector
+    public Canvas canvasHp;
+
+    [Header("Combat Audio")]
+    [SerializeField] private float hearRadius = 500f;
+    private AudioSource combatAudioSource;
 
     private bool serverIsAttack;
     public Transform parentSkill;
@@ -115,7 +120,6 @@ public class PlayerOther : MonoBehaviour
     private float _debugLastFlipTime = 0f;
 #endif
 
-    // ===== Death/Respawn: disable collision & controllers =====
     private Collider[] _cachedColliders;
     private CharacterController[] _cachedCharControllers;
     private Rigidbody[] _cachedRigidbodies;
@@ -123,36 +127,21 @@ public class PlayerOther : MonoBehaviour
 
     private void CacheOriginIfNeeded(TMP_Text txt, ref Vector2 origin, ref bool cached)
     {
-        if (!cached && txt != null)
-        {
-            origin = txt.rectTransform.anchoredPosition;
-            cached = true;
-        }
+        if (!cached && txt != null) { origin = txt.rectTransform.anchoredPosition; cached = true; }
     }
 
     private void ResetFloatTextToOrigin(TMP_Text txt, ref Vector2 origin, ref bool cached)
     {
         if (txt == null) return;
         CacheOriginIfNeeded(txt, ref origin, ref cached);
-
         var rt = txt.rectTransform;
         rt.anchoredPosition = origin;
         rt.localScale = Vector3.one * startScale;
-
-        var c = txt.color;
-        c.a = 1f;
-        txt.color = c;
+        var c = txt.color; c.a = 1f; txt.color = c;
     }
 
-    private void Awake()
-    {
-        DisableAllSkillObjects();
-    }
-
-    private void OnEnable()
-    {
-        DisableAllSkillObjects();
-    }
+    private void Awake() => DisableAllSkillObjects();
+    private void OnEnable() => DisableAllSkillObjects();
 
     void Start()
     {
@@ -160,54 +149,41 @@ public class PlayerOther : MonoBehaviour
         SetPhysicsEnabled(true);
 
         SafeSetHealthBarActive(TranDauControl.Instance != null);
-        SafeSetCanvasHpActive(TranDauControl.Instance != null); // ✅ Bật canvas HP khi start
+        SafeSetCanvasHpActive(TranDauControl.Instance != null);
 
         if (TranDauControl.Instance != null)
             SafeSetThanhMau(teamId == B.Instance.teamId ? 1 : 2);
 
         isAlive = true;
 
-        Vector3 pos = transform.position;
-        pos.y = 0f;
-        transform.position = pos;
-
+        Vector3 pos = transform.position; pos.y = 0f; transform.position = pos;
         lastServerPos = transform.position;
         targetPos = transform.position;
         targetRot = transform.rotation;
         serverVelocity = Vector3.zero;
         lastUpdateTime = Time.time;
-
         _netMoving = false;
         _animSpeedSmoothed = 0f;
 
         CacheOriginIfNeeded(txtMinusHp, ref minusHpOriginPos, ref minusHpOriginCached);
         DisableAllSkillObjects();
+        InitCombatAudioSource();
     }
 
     private void DisableAllSkillObjects()
     {
-        if (normalAttackConfig.attackObject != null)
-            normalAttackConfig.attackObject.SetActive(false);
-
-        if (skill1 != null && skill1.skillObject != null)
-            skill1.skillObject.SetActive(false);
-
-        if (skill2 != null && skill2.skillObject != null)
-            skill2.skillObject.SetActive(false);
-
-        if (skill3 != null && skill3.skillObject != null)
-            skill3.skillObject.SetActive(false);
+        if (normalAttackConfig.attackObject != null) normalAttackConfig.attackObject.SetActive(false);
+        if (skill1 != null && skill1.skillObject != null) skill1.skillObject.SetActive(false);
+        if (skill2 != null && skill2.skillObject != null) skill2.skillObject.SetActive(false);
+        if (skill3 != null && skill3.skillObject != null) skill3.skillObject.SetActive(false);
     }
 
     public void SetTeamId(int teamId) => this.teamId = teamId;
 
     public void SetHp(int hp, int maxHp)
     {
-        hpMax = maxHp;
-        hpCurrent = hp;
-
+        hpMax = maxHp; hpCurrent = hp;
         if (TranDauControl.Instance == null || HealthBar == null) return;
-
         float ratio = (hpMax <= 0f) ? 0f : Mathf.Clamp01(hpCurrent / hpMax);
         if (hpCurrent < hpMax) HealthBar.SetProgress(ratio, 30);
         else HealthBar.SetProgress(1f, 100);
@@ -219,25 +195,14 @@ public class PlayerOther : MonoBehaviour
         isAlive = true;
         SetPhysicsEnabled(true);
 
-        isNormalAttacking = false;
-        isSkillCasting = false;
-        isHit = false;
-        serverIsAttack = false;
+        isNormalAttacking = false; isSkillCasting = false; isHit = false; serverIsAttack = false;
 
-        transform.position = spawnPos;
-        targetPos = spawnPos;
-        lastServerPos = spawnPos;
+        transform.position = spawnPos; targetPos = spawnPos; lastServerPos = spawnPos;
         serverVelocity = Vector3.zero;
-
-        targetRot = Quaternion.Euler(0, heading, 0);
-        transform.rotation = targetRot;
-
+        targetRot = Quaternion.Euler(0, heading, 0); transform.rotation = targetRot;
         lastUpdateTime = Time.time;
         catchupTimer = CATCHUP_DURATION;
-
-        _netMoving = false;
-        _animSpeedSmoothed = 0f;
-        velocity = Vector3.zero;
+        _netMoving = false; _animSpeedSmoothed = 0f; velocity = Vector3.zero;
 
         if (animator != null)
         {
@@ -251,17 +216,13 @@ public class PlayerOther : MonoBehaviour
         }
 
         SafeSetHealthBarActive(TranDauControl.Instance != null);
-        SafeSetCanvasHpActive(TranDauControl.Instance != null); // ✅ Bật canvas HP khi respawn
+        SafeSetCanvasHpActive(TranDauControl.Instance != null);
 
         if (TranDauControl.Instance != null)
             SafeSetThanhMau(teamId == B.Instance.teamId ? 1 : 2);
 
         ForceEnableRenderers();
-
-        hasPendingServerAim = false;
-        pendingAim = default;
-        serverDirCached = Vector3.zero;
-
+        hasPendingServerAim = false; pendingAim = default; serverDirCached = Vector3.zero;
         DisableAllSkillObjects();
 
         if (txtMinusHp != null)
@@ -279,28 +240,21 @@ public class PlayerOther : MonoBehaviour
 
         if (animator != null && animator.isInitialized)
         {
-            animator.SetBool("isDeath", false);
-            animator.SetBool("isHit", false);
-            animator.SetBool("isAttack", false);
-            animator.SetBool("isSkill1", false);
-            animator.SetBool("isSkill2", false);
-            animator.SetBool("isSkill3", false);
+            animator.SetBool("isDeath", false); animator.SetBool("isHit", false);
+            animator.SetBool("isAttack", false); animator.SetBool("isSkill1", false);
+            animator.SetBool("isSkill2", false); animator.SetBool("isSkill3", false);
             animator.SetFloat("Speed", 0f);
         }
 
-        _netMoving = false;
-        _animSpeedSmoothed = 0f;
-
+        _netMoving = false; _animSpeedSmoothed = 0f;
         SafeSetHealthBarActive(TranDauControl.Instance != null);
-        SafeSetCanvasHpActive(TranDauControl.Instance != null); // ✅ Bật canvas HP khi revive
+        SafeSetCanvasHpActive(TranDauControl.Instance != null);
 
         if (TranDauControl.Instance != null)
             SafeSetThanhMau(teamId == B.Instance.teamId ? 1 : 2);
 
         ForceEnableRenderers();
-        stuckTimer = 0f;
-        lastStateName = "";
-
+        stuckTimer = 0f; lastStateName = "";
         DisableAllSkillObjects();
 
         if (txtMinusHp != null)
@@ -315,7 +269,6 @@ public class PlayerOther : MonoBehaviour
     {
         var renderers = GetComponentsInChildren<Renderer>(true);
         for (int i = 0; i < renderers.Length; i++) renderers[i].enabled = true;
-
         var sprites = GetComponentsInChildren<SpriteRenderer>(true);
         for (int i = 0; i < sprites.Length; i++) sprites[i].enabled = true;
     }
@@ -324,15 +277,8 @@ public class PlayerOther : MonoBehaviour
     {
         userId = data.userId;
 
-        if (!data.isAlive)
-        {
-            if (isAlive) onDeath();
-            return;
-        }
-        else
-        {
-            if (!isAlive) ReviveVisuals();
-        }
+        if (!data.isAlive) { if (isAlive) onDeath(); return; }
+        else { if (!isAlive) ReviveVisuals(); }
 
         Vector3 newServerPos = new Vector3(data.x, 0f, data.y);
         float now = Time.time;
@@ -340,50 +286,29 @@ public class PlayerOther : MonoBehaviour
         if (!_hasFirstSnapshot || lastUpdateTime <= 0.0001f)
         {
             _hasFirstSnapshot = true;
-
-            transform.position = newServerPos;
-            targetPos = newServerPos;
-            lastServerPos = newServerPos;
-
-            serverVelocity = Vector3.zero;
-            lastUpdateTime = now;
-
-            targetRot = Quaternion.Euler(0, data.heading, 0);
-            transform.rotation = targetRot;
-
+            transform.position = newServerPos; targetPos = newServerPos; lastServerPos = newServerPos;
+            serverVelocity = Vector3.zero; lastUpdateTime = now;
+            targetRot = Quaternion.Euler(0, data.heading, 0); transform.rotation = targetRot;
             catchupTimer = CATCHUP_DURATION;
-
-            _netMoving = false;
-            _animSpeedSmoothed = 0f;
-            velocity = Vector3.zero;
-
+            _netMoving = false; _animSpeedSmoothed = 0f; velocity = Vector3.zero;
             SetHp(data.hp, data.maxHp);
             return;
         }
 
         float dt = now - lastUpdateTime;
         if (dt > 0.7f) catchupTimer = CATCHUP_DURATION;
-
         float dtForVel = Mathf.Max(dt, 1f / 60f);
 
         if (dt > 0.0001f)
         {
             serverVelocity = (newServerPos - lastServerPos) / dtForVel;
-
-            float maxSpeed = 500f;
-            float m = serverVelocity.magnitude;
+            float maxSpeed = 500f; float m = serverVelocity.magnitude;
             if (m > maxSpeed) serverVelocity = serverVelocity / m * maxSpeed;
         }
-        else
-        {
-            serverVelocity = Vector3.zero;
-        }
+        else serverVelocity = Vector3.zero;
 
-        targetPos = newServerPos;
-        lastServerPos = newServerPos;
-
+        targetPos = newServerPos; lastServerPos = newServerPos;
         targetRot = Quaternion.Euler(0, data.heading, 0);
-
         SetHp(data.hp, data.maxHp);
         lastUpdateTime = now;
 
@@ -396,17 +321,15 @@ public class PlayerOther : MonoBehaviour
     {
         var cc = GetComponent<CCHandler>();
         if (cc != null && (cc.IsStunned || cc.IsKnockedUp)) return;
-
         if (!isAlive || !isAttack) return;
 
+        PlayCombatSoundsIfNearby(isSkill: false);
         FindTargetInRange(normalAttackConfig.attackRange);
 
         if (target != null) RotateToTargetInstant();
         else transform.rotation = targetRot;
 
-        isNormalAttacking = true;
-        serverIsAttack = true;
-
+        isNormalAttacking = true; serverIsAttack = true;
         if (animator != null) animator.SetBool("isAttack", true);
 
         Invoke(nameof(ShowNormalAttackObject), normalAttackConfig.spawnDelay);
@@ -416,58 +339,35 @@ public class PlayerOther : MonoBehaviour
     private void RotateToTargetInstant()
     {
         if (target == null) return;
-        Vector3 dir = target.position - transform.position;
-        dir.y = 0;
+        Vector3 dir = target.position - transform.position; dir.y = 0;
         if (dir.sqrMagnitude < 0.01f) return;
         transform.rotation = Quaternion.LookRotation(dir);
     }
 
-    private void AutoResetNormalAttack()
-    {
-        if (isNormalAttacking) EndNormalAttack();
-    }
+    private void AutoResetNormalAttack() { if (isNormalAttacking) EndNormalAttack(); }
 
     private void EndNormalAttack()
     {
         if (!isNormalAttacking) return;
-
         if (animator != null) animator.SetBool("isAttack", false);
-
-        isNormalAttacking = false;
-        serverIsAttack = false;
-
-        if (normalAttackConfig.attackObject != null)
-            normalAttackConfig.attackObject.SetActive(false);
+        isNormalAttacking = false; serverIsAttack = false;
+        if (normalAttackConfig.attackObject != null) normalAttackConfig.attackObject.SetActive(false);
     }
 
     public void SetPotion(Vector3 pos)
     {
-        transform.position = pos;
-        targetPos = pos;
-        lastServerPos = pos;
-        serverVelocity = Vector3.zero;
-        lastUpdateTime = Time.time;
+        transform.position = pos; targetPos = pos; lastServerPos = pos;
+        serverVelocity = Vector3.zero; lastUpdateTime = Time.time;
         catchupTimer = CATCHUP_DURATION;
-
-        _netMoving = false;
-        _animSpeedSmoothed = 0f;
-        velocity = Vector3.zero;
+        _netMoving = false; _animSpeedSmoothed = 0f; velocity = Vector3.zero;
     }
 
     void Update()
     {
-        if (!isAlive)
-        {
-            SetAnimatorSpeed(0f);
-            return;
-        }
-
+        if (!isAlive) { SetAnimatorSpeed(0f); return; }
         DetectAnimatorStuck();
         UpdateMovementWithExtrapolation();
-
-        if (!IsBusy())
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, camGiacXoayMat * Time.deltaTime);
-
+        if (!IsBusy()) transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, camGiacXoayMat * Time.deltaTime);
         UpdateAnimation();
     }
 
@@ -484,64 +384,37 @@ public class PlayerOther : MonoBehaviour
 
         Vector3 currentPos = transform.position;
         float timeSinceLastUpdate = Time.time - lastUpdateTime;
-
         Vector3 extrapolatedTarget = targetPos;
 
         if (serverVelocity.sqrMagnitude > 0.01f)
         {
             float t = Mathf.Min(timeSinceLastUpdate, EXTRAPOLATION_LIMIT);
-
-            Vector3 predicted = targetPos + serverVelocity * t;
-            predicted.y = 0f;
-
-            Vector3 drift = predicted - targetPos;
-            drift.y = 0f;
-            float driftMag = drift.magnitude;
-            if (driftMag > MAX_EXTRA_DISTANCE)
-                predicted = targetPos + drift.normalized * MAX_EXTRA_DISTANCE;
-
+            Vector3 predicted = targetPos + serverVelocity * t; predicted.y = 0f;
+            Vector3 drift = predicted - targetPos; drift.y = 0f; float driftMag = drift.magnitude;
+            if (driftMag > MAX_EXTRA_DISTANCE) predicted = targetPos + drift.normalized * MAX_EXTRA_DISTANCE;
             extrapolatedTarget = predicted;
         }
 
-        if (float.IsNaN(extrapolatedTarget.x) || float.IsNaN(extrapolatedTarget.z))
-            return;
+        if (float.IsNaN(extrapolatedTarget.x) || float.IsNaN(extrapolatedTarget.z)) return;
 
-        Vector3 toTarget = extrapolatedTarget - currentPos;
-        toTarget.y = 0f;
+        Vector3 toTarget = extrapolatedTarget - currentPos; toTarget.y = 0f;
         float dist = toTarget.magnitude;
 
         if (dist >= HARD_SNAP_DISTANCE)
         {
             transform.position = new Vector3(extrapolatedTarget.x, 0f, extrapolatedTarget.z);
-            catchupTimer = CATCHUP_DURATION;
-            velocity = Vector3.zero;
-            return;
+            catchupTimer = CATCHUP_DURATION; velocity = Vector3.zero; return;
         }
 
-        if (dist < chongRung)
-            return;
+        if (dist < chongRung) return;
 
         float smooth = camGiacDiChuyen;
-
-        if (catchupTimer > 0f)
-        {
-            smooth *= CATCHUP_MULT;
-            catchupTimer -= Time.deltaTime;
-        }
+        if (catchupTimer > 0f) { smooth *= CATCHUP_MULT; catchupTimer -= Time.deltaTime; }
 
         float maxSpeed = Mathf.Max(50f, serverVelocity.magnitude * 1.25f);
-
         Vector3 vel = velocity;
-        Vector3 newPos = Vector3.SmoothDamp(
-            currentPos,
-            extrapolatedTarget,
-            ref vel,
-            1f / Mathf.Max(1f, smooth),
-            maxSpeed,
-            Time.deltaTime
-        );
+        Vector3 newPos = Vector3.SmoothDamp(currentPos, extrapolatedTarget, ref vel, 1f / Mathf.Max(1f, smooth), maxSpeed, Time.deltaTime);
         newPos.y = 0f;
-
         velocity = vel;
         transform.position = newPos;
     }
@@ -551,14 +424,11 @@ public class PlayerOther : MonoBehaviour
         if (animator == null) return;
 
         Vector3 pos = transform.position;
-        Vector3 toTarget = targetPos - pos;
-        toTarget.y = 0f;
-
+        Vector3 toTarget = targetPos - pos; toTarget.y = 0f;
         float dist = toTarget.magnitude;
         float v = serverVelocity.magnitude;
 
-        const float V_ON = 35f;
-        const float V_OFF = 15f;
+        const float V_ON = 35f; const float V_OFF = 15f;
         float D_ON = Mathf.Max(chongRung, 3.5f);
         float D_OFF = Mathf.Max(0.8f, chongRung * 0.55f);
 
@@ -570,26 +440,11 @@ public class PlayerOther : MonoBehaviour
 
         if (now >= _stateHoldUntil)
         {
-            if (!_netMoving)
-            {
-                if (wantMove)
-                {
-                    _netMoving = true;
-                    _stateHoldUntil = now + MIN_STATE_HOLD;
-                }
-            }
-            else
-            {
-                if (wantStop)
-                {
-                    _netMoving = false;
-                    _stateHoldUntil = now + MIN_STATE_HOLD;
-                }
-            }
+            if (!_netMoving) { if (wantMove) { _netMoving = true; _stateHoldUntil = now + MIN_STATE_HOLD; } }
+            else { if (wantStop) { _netMoving = false; _stateHoldUntil = now + MIN_STATE_HOLD; } }
         }
 
         float targetSpeed = (!IsBusy() && _netMoving) ? 1f : 0f;
-
         float step = 10f * Time.deltaTime;
         _animSpeedSmoothed = Mathf.MoveTowards(_animSpeedSmoothed, targetSpeed, step);
         animator.SetFloat("Speed", _animSpeedSmoothed);
@@ -604,20 +459,14 @@ public class PlayerOther : MonoBehaviour
         }
 
         Collider[] hits = Physics.OverlapSphere(transform.position, range, enemyLayer);
-        target = null;
-        float minDist = Mathf.Infinity;
+        target = null; float minDist = Mathf.Infinity;
 
         for (int i = 0; i < hits.Length; i++)
         {
             var hit = hits[i];
             if (hit.transform == this.transform) continue;
-
             float distance = Vector3.Distance(transform.position, hit.transform.position);
-            if (distance < minDist)
-            {
-                minDist = distance;
-                target = hit.transform;
-            }
+            if (distance < minDist) { minDist = distance; target = hit.transform; }
         }
     }
 
@@ -625,8 +474,9 @@ public class PlayerOther : MonoBehaviour
     {
         var cc = GetComponent<CCHandler>();
         if (cc != null && (cc.IsStunned || cc.IsKnockedUp || cc.IsSilenced)) return;
-
         if (!isAlive) return;
+
+        PlayCombatSoundsIfNearby(isSkill: true, skillSlot: skill);
 
         if (isNormalAttacking)
         {
@@ -644,8 +494,7 @@ public class PlayerOther : MonoBehaviour
 
         if (hasPendingServerAim && serverDirCached.sqrMagnitude > 0.0001f)
         {
-            Vector3 look = serverDirCached;
-            look.y = 0f;
+            Vector3 look = serverDirCached; look.y = 0f;
             if (look.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(look);
             else transform.rotation = targetRot;
         }
@@ -673,7 +522,6 @@ public class PlayerOther : MonoBehaviour
     private void EndSkillAnimationWrapper()
     {
         isSkillCasting = false;
-
         if (animator != null)
         {
             animator.SetBool("isAttack", false);
@@ -681,10 +529,8 @@ public class PlayerOther : MonoBehaviour
             animator.SetBool("isSkill2", false);
             animator.SetBool("isSkill3", false);
         }
-
         if (currentSkillCfg != null && currentSkillCfg.skillObject != null)
             currentSkillCfg.skillObject.SetActive(false);
-
         currentSkillCfg = null;
     }
 
@@ -692,14 +538,11 @@ public class PlayerOther : MonoBehaviour
     {
         if (normalAttackConfig.attackObject == null) return;
 
-        Vector3 spawnPos;
-        Quaternion spawnRot;
-
+        Vector3 spawnPos; Quaternion spawnRot;
         if (target != null)
         {
             spawnPos = target.position;
-            Vector3 d = (target.position - transform.position);
-            d.y = 0f;
+            Vector3 d = (target.position - transform.position); d.y = 0f;
             spawnRot = (d.sqrMagnitude > 0.0001f) ? Quaternion.LookRotation(d) : transform.rotation;
         }
         else
@@ -721,16 +564,12 @@ public class PlayerOther : MonoBehaviour
         {
             if (currentSkillCfg.skillObject != null)
                 ShowSkillByServerAim(currentSkillCfg, pendingAim);
-
-            hasPendingServerAim = false;
-            pendingAim = default;
-            serverDirCached = Vector3.zero;
+            hasPendingServerAim = false; pendingAim = default; serverDirCached = Vector3.zero;
             return;
         }
 
         if (currentSkillCfg.skillObject == null) return;
 
-        // ★ FIX: Canvas skill fallback — reset localPosition X/Z = 0
         if (IsCanvasTypeSkill(GetCurrentSkillType()))
         {
             ResetSkillObjectToLocalZero(currentSkillCfg.skillObject);
@@ -739,14 +578,11 @@ public class PlayerOther : MonoBehaviour
             return;
         }
 
-        Vector3 spawnPos;
-        Quaternion spawnRot;
-
+        Vector3 spawnPos; Quaternion spawnRot;
         if (target != null)
         {
             spawnPos = target.position;
-            Vector3 d = (target.position - transform.position);
-            d.y = 0f;
+            Vector3 d = (target.position - transform.position); d.y = 0f;
             spawnRot = (d.sqrMagnitude > 0.0001f) ? Quaternion.LookRotation(d) : transform.rotation;
         }
         else
@@ -764,18 +600,12 @@ public class PlayerOther : MonoBehaviour
     {
         if (cfg == null || cfg.skillObject == null) return;
 
-        // ★ FIX: Canvas skill (type 2) chỉ rotate, RESET localPosition X/Z = 0
         if (IsCanvasTypeSkill(info.typeSkill))
         {
             ResetSkillObjectToLocalZero(cfg.skillObject);
-
-            Vector3 dir = info.dir;
-            dir.y = 0f;
-            if (dir.sqrMagnitude > 0.0001f)
-                cfg.skillObject.transform.rotation = Quaternion.LookRotation(dir.normalized);
-            else
-                cfg.skillObject.transform.rotation = transform.rotation;
-
+            Vector3 dir = info.dir; dir.y = 0f;
+            if (dir.sqrMagnitude > 0.0001f) cfg.skillObject.transform.rotation = Quaternion.LookRotation(dir.normalized);
+            else cfg.skillObject.transform.rotation = transform.rotation;
             cfg.skillObject.SetActive(true);
             return;
         }
@@ -808,22 +638,16 @@ public class PlayerOther : MonoBehaviour
         out Vector3 dir, out Quaternion rot, out bool needMove)
     {
         origin = info.origin;
-
         bool usesDir = SkillCastProtocol33.UsesDirection(info.typeSkill);
         bool usesTarget = SkillCastProtocol33.UsesTargetPos(info.typeSkill);
 
-        dir = info.dir;
-        dir.y = 0f;
-
+        dir = info.dir; dir.y = 0f;
         if (dir.sqrMagnitude < 0.0001f && info.hasTarget)
         {
-            Vector3 d = info.targetPos - origin;
-            d.y = 0f;
+            Vector3 d = info.targetPos - origin; d.y = 0f;
             if (d.sqrMagnitude > 0.0001f) dir = d.normalized;
         }
-
-        if (dir.sqrMagnitude > 0.0001f)
-            dir.Normalize();
+        if (dir.sqrMagnitude > 0.0001f) dir.Normalize();
 
         rot = (dir.sqrMagnitude > 0.0001f) ? Quaternion.LookRotation(dir) : transform.rotation;
 
@@ -837,40 +661,27 @@ public class PlayerOther : MonoBehaviour
     private IEnumerator CoMoveSkillObject(GameObject obj, Vector3 targetPosition, float moveSpeed)
     {
         if (obj == null) yield break;
-
         while (obj != null && obj.activeSelf && Vector3.Distance(obj.transform.position, targetPosition) > 0.1f)
         {
             obj.transform.position = Vector3.MoveTowards(obj.transform.position, targetPosition, moveSpeed * Time.deltaTime);
             yield return null;
         }
-
-        if (obj != null)
-            obj.SetActive(false);
+        if (obj != null) obj.SetActive(false);
     }
 
-    private void SetAnimatorSpeed(float speed)
-    {
-        if (animator != null)
-            animator.SetFloat("Speed", speed);
-    }
-
+    private void SetAnimatorSpeed(float speed) { if (animator != null) animator.SetFloat("Speed", speed); }
     private bool IsBusy() => isNormalAttacking || isSkillCasting || isHit;
 
     public void onDeath()
     {
         isAlive = false;
-
-        // ✅ tắt va chạm + controller để không block map
         SetPhysicsEnabled(false);
-
         SetAnimatorSpeed(0f);
 
         if (animator != null)
         {
-            animator.SetBool("isAttack", false);
-            animator.SetBool("isSkill1", false);
-            animator.SetBool("isSkill2", false);
-            animator.SetBool("isSkill3", false);
+            animator.SetBool("isAttack", false); animator.SetBool("isSkill1", false);
+            animator.SetBool("isSkill2", false); animator.SetBool("isSkill3", false);
             animator.SetBool("isDeath", true);
         }
 
@@ -879,27 +690,13 @@ public class PlayerOther : MonoBehaviour
         CancelInvoke(nameof(EndSkillAnimationWrapper));
         CancelInvoke(nameof(ShowSkillWithDelay));
 
-        isNormalAttacking = false;
-        isSkillCasting = false;
-        isHit = false;
-        serverIsAttack = false;
-
-        hasPendingServerAim = false;
-        pendingAim = default;
-        serverDirCached = Vector3.zero;
-
-        _netMoving = false;
-        _animSpeedSmoothed = 0f;
-        velocity = Vector3.zero;
+        isNormalAttacking = false; isSkillCasting = false; isHit = false; serverIsAttack = false;
+        hasPendingServerAim = false; pendingAim = default; serverDirCached = Vector3.zero;
+        _netMoving = false; _animSpeedSmoothed = 0f; velocity = Vector3.zero;
 
         DisableAllSkillObjects();
-
-        // ✅ tắt HP bar (ProgressBar)
         SafeSetHealthBarActive(false);
-
-        // ✅ tắt Canvas HP
         SafeSetCanvasHpActive(false);
-
         if (txtMinusHp != null) txtMinusHp.gameObject.SetActive(false);
     }
 
@@ -914,21 +711,11 @@ public class PlayerOther : MonoBehaviour
     void DetectAnimatorStuck()
     {
         if (!isAlive || animator == null || !animator.isInitialized) return;
-
         AnimatorStateInfo info = animator.GetCurrentAnimatorStateInfo(0);
         string stateName = GetCurrentStateName(info);
-
-        if (stateName != lastStateName)
-        {
-            lastStateName = stateName;
-            stuckTimer = 0f;
-            return;
-        }
-
+        if (stateName != lastStateName) { lastStateName = stateName; stuckTimer = 0f; return; }
         stuckTimer += Time.deltaTime;
-
         if (stateName == "Idle" || stateName == "Walking") return;
-
         if (stuckTimer > 5f) ForceResetAnimator();
     }
 
@@ -942,85 +729,51 @@ public class PlayerOther : MonoBehaviour
         if (info.IsName("Skill3")) return "Skill3";
         if (info.IsName("Death")) return "Death";
         if (info.IsName("Hit")) return "Hit";
-
         return info.shortNameHash.ToString();
     }
 
     void ForceResetAnimator()
     {
         SetAnimatorSpeed(0f);
-
         if (animator != null)
         {
-            animator.SetBool("isAttack", false);
-            animator.SetBool("isSkill1", false);
-            animator.SetBool("isSkill2", false);
-            animator.SetBool("isSkill3", false);
-            animator.SetBool("isDeath", false);
-            animator.SetBool("isHit", false);
+            animator.SetBool("isAttack", false); animator.SetBool("isSkill1", false);
+            animator.SetBool("isSkill2", false); animator.SetBool("isSkill3", false);
+            animator.SetBool("isDeath", false); animator.SetBool("isHit", false);
         }
-
-        isNormalAttacking = false;
-        isSkillCasting = false;
-        isHit = false;
-
-        _netMoving = false;
-        _animSpeedSmoothed = 0f;
-
-        stuckTimer = 0f;
-        lastStateName = "";
+        isNormalAttacking = false; isSkillCasting = false; isHit = false;
+        _netMoving = false; _animSpeedSmoothed = 0f;
+        stuckTimer = 0f; lastStateName = "";
     }
 
-    private void SafeSetThanhMau(int type)
-    {
-        if (HealthBar != null) HealthBar.SetThanhMau(type);
-    }
-
-    private void SafeSetHealthBarActive(bool active)
-    {
-        if (HealthBar != null) HealthBar.gameObject.SetActive(active);
-    }
-
-    // ✅ Hàm mới để tắt/bật Canvas HP
-    private void SafeSetCanvasHpActive(bool active)
-    {
-        if (canvasHp != null) canvasHp.gameObject.SetActive(active);
-    }
+    private void SafeSetThanhMau(int type) { if (HealthBar != null) HealthBar.SetThanhMau(type); }
+    private void SafeSetHealthBarActive(bool active) { if (HealthBar != null) HealthBar.gameObject.SetActive(active); }
+    private void SafeSetCanvasHpActive(bool active) { if (canvasHp != null) canvasHp.gameObject.SetActive(active); }
 
     public void OnServerSkillCast(TranDauControl.SkillCastInfo info)
     {
         Vector3 d = info.dir;
-        if (info.hasTarget)
-            d = (info.targetPos - info.origin);
-
+        if (info.hasTarget) d = (info.targetPos - info.origin);
         d.y = 0f;
         if (d.sqrMagnitude > 0.0001f) d.Normalize();
-
         info.dir = d;
-        pendingAim = info;
-        hasPendingServerAim = true;
-        serverDirCached = d;
+        pendingAim = info; hasPendingServerAim = true; serverDirCached = d;
     }
 
     public void ShowMinusHp(int value)
     {
         if (txtMinusHp == null) return;
-
         ForceShowText(txtMinusHp);
         ResetFloatTextToOrigin(txtMinusHp, ref minusHpOriginPos, ref minusHpOriginCached);
 
         int v = Mathf.Abs(value);
         txtMinusHp.text = $"-{v}";
-
-        var c = txtMinusHp.color;
-        c.a = 1f;
-        txtMinusHp.color = c;
+        var c = txtMinusHp.color; c.a = 1f; txtMinusHp.color = c;
         txtMinusHp.ForceMeshUpdate();
 
         if (coMinusHpFloat != null)
         {
-            StopCoroutine(coMinusHpFloat);
-            coMinusHpFloat = null;
+            StopCoroutine(coMinusHpFloat); coMinusHpFloat = null;
             ResetFloatTextToOrigin(txtMinusHp, ref minusHpOriginPos, ref minusHpOriginCached);
         }
 
@@ -1030,19 +783,15 @@ public class PlayerOther : MonoBehaviour
     private void ForceShowText(TMP_Text txt)
     {
         if (txt == null) return;
-
         Transform p = txt.transform;
         while (p != null)
         {
             if (!p.gameObject.activeSelf) p.gameObject.SetActive(true);
-
             var cg = p.GetComponent<CanvasGroup>();
             if (cg != null && cg.alpha <= 0.001f) cg.alpha = 1f;
-
             if (p.localScale.sqrMagnitude < 0.0001f) p.localScale = Vector3.one;
             p = p.parent;
         }
-
         if (!txt.gameObject.activeSelf) txt.gameObject.SetActive(true);
         txt.enabled = true;
     }
@@ -1050,21 +799,15 @@ public class PlayerOther : MonoBehaviour
     private IEnumerator CoFloatText(TMP_Text txt)
     {
         if (txt == null) yield break;
-
         txt.gameObject.SetActive(true);
         RectTransform rt = txt.rectTransform;
         Vector2 startPos = rt.anchoredPosition;
         Vector2 endPos = startPos + Vector2.up * floatHeight;
-
         float dir = UnityEngine.Random.value < 0.5f ? -1f : 1f;
         float arc = floatArcX * dir;
         float t = 0f;
-
-        Color c = txt.color;
-        c.a = 0f;
-        txt.color = c;
+        Color c = txt.color; c.a = 0f; txt.color = c;
         rt.localScale = Vector3.one * startScale;
-
         float dur = Mathf.Max(0.05f, floatDuration);
 
         while (t < 1f)
@@ -1072,95 +815,39 @@ public class PlayerOther : MonoBehaviour
             t += Time.deltaTime / dur;
             float u = Mathf.Clamp01(t);
             float easeOut = 1f - Mathf.Pow(1f - u, 3f);
-
             float xOffset = Mathf.Sin(u * Mathf.PI) * arc;
-            Vector2 pos = Vector2.Lerp(startPos, endPos, easeOut);
-            pos.x += xOffset;
+            Vector2 pos = Vector2.Lerp(startPos, endPos, easeOut); pos.x += xOffset;
             rt.anchoredPosition = pos;
-
             float s;
-            if (u < 0.35f)
-            {
-                float k = u / 0.35f;
-                s = Mathf.Lerp(startScale, peakScale, 1f - Mathf.Pow(1f - k, 3f));
-            }
-            else
-            {
-                float k = (u - 0.35f) / 0.65f;
-                s = Mathf.Lerp(peakScale, endScale, k);
-            }
+            if (u < 0.35f) { float k = u / 0.35f; s = Mathf.Lerp(startScale, peakScale, 1f - Mathf.Pow(1f - k, 3f)); }
+            else { float k = (u - 0.35f) / 0.65f; s = Mathf.Lerp(peakScale, endScale, k); }
             rt.localScale = Vector3.one * s;
-
             float alphaIn = Mathf.Clamp01(u / 0.12f);
             float alphaOut = 1f - Mathf.Clamp01((u - 0.55f) / 0.45f);
-            c.a = Mathf.Min(alphaIn, alphaOut);
-            txt.color = c;
-
+            c.a = Mathf.Min(alphaIn, alphaOut); txt.color = c;
             yield return null;
         }
 
         rt.anchoredPosition = startPos;
         rt.localScale = Vector3.one * startScale;
-        c.a = 0f;
-        txt.color = c;
+        c.a = 0f; txt.color = c;
         txt.gameObject.SetActive(false);
     }
 
 #if UNITY_EDITOR
-    private void DebugLogSnapshot(Vector3 newTargetPos, Vector3 newServerVel)
-    {
-        Vector3 pos = transform.position;
-        float dist = Vector3.Distance(pos, newTargetPos);
-
-        // Debug.Log(
-        //     $"[ANIM-DEBUG] SNAPSHOT " +
-        //     $"uid={userId} " +
-        //     $"newTarget=({newTargetPos.x:F1},{newTargetPos.z:F1}) " +
-        //     $"currentPos=({pos.x:F1},{pos.z:F1}) " +
-        //     $"distJump={dist:F1} " +
-        //     $"newVel=({newServerVel.x:F1},{newServerVel.z:F1}) " +
-        //     $"velMag={newServerVel.magnitude:F1}"
-        // );
-    }
+    private void DebugLogSnapshot(Vector3 newTargetPos, Vector3 newServerVel) { }
 
     private void DebugDetectFlip()
     {
         if (animator == null || !animator.isInitialized) return;
-
         float currentSpeed = animator.GetFloat("Speed");
-
         if (Mathf.Abs(currentSpeed - _debugLastSpeed) > 0.5f)
         {
             float now = Time.time;
-            if (now - _debugLastFlipTime < 0.2f)
-            {
-                _debugFlipCount++;
-
-                Vector3 pos = transform.position;
-                Vector3 moveVec = targetPos - pos;
-                moveVec.y = 0;
-
-                float distToTarget = moveVec.magnitude;
-                float velMag = serverVelocity.magnitude;
-
-                // Debug.LogWarning(
-                //     $"[ANIM-DEBUG] FLIP#{_debugFlipCount} " +
-                //     $"uid={userId} " +
-                //     $"speed {_debugLastSpeed:F2}→{currentSpeed:F2} " +
-                //     $"distToTarget={distToTarget:F1} " +
-                //     $"chongRung={chongRung:F1} " +
-                //     $"velMag={velMag:F1} " +
-                //     $"timeSinceSnap={Time.time - lastUpdateTime:F3}s " +
-                //     $"busy={IsBusy()}"
-                // );
-            }
-            else
-            {
-                _debugFlipCount = 0;
-            }
+            if (now - _debugLastFlipTime < 0.2f) _debugFlipCount++;
+            else _debugFlipCount = 0;
             _debugLastFlipTime = now;
         }
-
         _debugLastSpeed = currentSpeed;
     }
 #endif
@@ -1169,8 +856,6 @@ public class PlayerOther : MonoBehaviour
     {
         if (_physicsCached) return;
         _physicsCached = true;
-
-        // Lấy toàn bộ collider/cc trong hierarchy (kể cả object con đang inactive)
         _cachedColliders = GetComponentsInChildren<Collider>(true);
         _cachedCharControllers = GetComponentsInChildren<CharacterController>(true);
         _cachedRigidbodies = GetComponentsInChildren<Rigidbody>(true);
@@ -1179,58 +864,126 @@ public class PlayerOther : MonoBehaviour
     private void SetPhysicsEnabled(bool enabled)
     {
         CachePhysicsIfNeeded();
-
         if (_cachedCharControllers != null)
-        {
             for (int i = 0; i < _cachedCharControllers.Length; i++)
-            {
-                var cc = _cachedCharControllers[i];
-                if (cc != null) cc.enabled = enabled;
-            }
-        }
+                if (_cachedCharControllers[i] != null) _cachedCharControllers[i].enabled = enabled;
 
         if (_cachedColliders != null)
-        {
             for (int i = 0; i < _cachedColliders.Length; i++)
-            {
-                var col = _cachedColliders[i];
-                if (col != null) col.enabled = enabled;
-            }
-        }
+                if (_cachedColliders[i] != null) _cachedColliders[i].enabled = enabled;
 
-        // Nếu prefab có rigidbody, disable physics để khỏi đẩy/lắc
         if (_cachedRigidbodies != null)
-        {
             for (int i = 0; i < _cachedRigidbodies.Length; i++)
             {
                 var rb = _cachedRigidbodies[i];
                 if (rb == null) continue;
-
                 rb.isKinematic = !enabled;
                 rb.detectCollisions = enabled;
             }
-        }
     }
 
-    // ★ Thêm helper này
     private bool IsCanvasTypeSkill(int typeSkill) => typeSkill == 2;
 
     private void ResetSkillObjectToLocalZero(GameObject skillObj)
     {
         if (skillObj == null) return;
-        Vector3 lp = skillObj.transform.localPosition;
-        lp.x = 0f;
-        lp.z = 0f;
+        Vector3 lp = skillObj.transform.localPosition; lp.x = 0f; lp.z = 0f;
         skillObj.transform.localPosition = lp;
     }
 
     private int GetCurrentSkillType()
     {
-        try
-        {
-            if (B.Instance == null || userId == 0) return 0;
-            return B.Instance.GetSkillType(userId, _currentSkillIndex);
-        }
+        try { if (B.Instance == null || userId == 0) return 0; return B.Instance.GetSkillType(userId, _currentSkillIndex); }
         catch { return 0; }
+    }
+
+    // ───────────────── COMBAT AUDIO ─────────────────
+
+    private string GetHeroKey()
+    {
+        if (B.Instance == null || spawnedHeroType <= 0) return null;
+        string name = B.Instance.GetNameTuong(spawnedHeroType);
+        return string.IsNullOrEmpty(name) ? null : name;
+    }
+
+    private bool IsPlayerMoveInHearRange()
+    {
+        if (TranDauControl.Instance == null) return false;
+        var pm = TranDauControl.Instance.playerMove;
+        if (pm == null || pm.controller == null) return false;
+        float distSqr = (transform.position - pm.controller.transform.position).sqrMagnitude;
+        return distSqr <= hearRadius * hearRadius;
+    }
+
+    private void PlayCombatSoundsIfNearby(bool isSkill, int skillSlot = 0)
+    {
+        if (!IsPlayerMoveInHearRange()) return;
+        if (combatAudioSource == null) return;
+
+        string heroKey = GetHeroKey();
+
+        if (!isSkill)
+        {
+            // đánh thường: phát audio_normal_attack theo hero, fallback sang NormalAttack chung
+            if (!string.IsNullOrEmpty(heroKey))
+            {
+                AudioClip naClip = Resources.Load<AudioClip>($"AudioTuong/{heroKey}/Skills/audio_normal_attack");
+                if (naClip != null) combatAudioSource.PlayOneShot(naClip);
+                else
+                {
+                    AudioClip fallback = Resources.Load<AudioClip>(PathAudio.NormalAttack);
+                    if (fallback != null) combatAudioSource.PlayOneShot(fallback);
+                }
+                PlayRandomClipFromFolder($"AudioTuong/{heroKey}/Voices", "effort");
+            }
+            else
+            {
+                AudioClip fallback = Resources.Load<AudioClip>(PathAudio.NormalAttack);
+                if (fallback != null) combatAudioSource.PlayOneShot(fallback);
+            }
+        }
+        else
+        {
+            if (!string.IsNullOrEmpty(heroKey))
+            {
+                // voice spellcast
+                PlayRandomClipFromFolder($"AudioTuong/{heroKey}/Voices", "spellcast");
+
+                // âm thanh skill theo slot
+                string skFile = skillSlot switch { 1 => "audio_sk1", 2 => "audio_sk2", 3 => "audio_sk3", _ => "" };
+                if (!string.IsNullOrEmpty(skFile))
+                {
+                    AudioClip skClip = Resources.Load<AudioClip>($"AudioTuong/{heroKey}/Skills/{skFile}");
+                    if (skClip != null) combatAudioSource.PlayOneShot(skClip);
+                }
+            }
+        }
+    }
+
+    private void PlayRandomClipFromFolder(string folderPath, string keyword)
+    {
+        AudioClip[] clips = Resources.LoadAll<AudioClip>(folderPath);
+        if (clips == null || clips.Length == 0) return;
+
+        var matched = new List<AudioClip>();
+        foreach (var c in clips)
+            if (c.name.ToLower().Contains(keyword)) matched.Add(c);
+
+        AudioClip pick = matched.Count > 0
+            ? matched[Random.Range(0, matched.Count)]
+            : clips[Random.Range(0, clips.Length)];
+
+        combatAudioSource.PlayOneShot(pick);
+    }
+
+    private void InitCombatAudioSource()
+    {
+        combatAudioSource = gameObject.AddComponent<AudioSource>();
+        combatAudioSource.spatialBlend = 1f;
+        combatAudioSource.minDistance = 80f;
+        combatAudioSource.maxDistance = hearRadius;
+        combatAudioSource.rolloffMode = AudioRolloffMode.Logarithmic;
+        combatAudioSource.playOnAwake = false;
+        combatAudioSource.loop = false;
     }
 }

@@ -59,12 +59,12 @@ public class MainGame1 : ScaleScreen
         if (txtPing != null) txtPing.text = ms + "ms";
 
         int state; // 0=weak,1=mid,2=good
-        if (ms < 50)
+        if (ms < 70)
         {
             state = 2;
             if (txtPing != null) txtPing.color = Color.green;
         }
-        else if (ms <= 120)
+        else if (ms <= 150)
         {
             state = 1;
             if (txtPing != null) txtPing.color = Color.yellow;

@@ -141,7 +141,7 @@
     public const int SHIELD_BROKEN = 273;
 
     // ==================== 280-299: IN-MATCH DEBUFFS ====================
-    public const int BUFF_REMOVED = 280;
+    public const int TB_IN_MATCH = 280;
     public const int DEBUFF_REMOVED = 281;
     public const int CC_STUN = 282;
     public const int CC_SLOW = 283;

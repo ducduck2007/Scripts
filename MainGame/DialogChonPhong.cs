@@ -14,7 +14,8 @@ public class DialogChonPhong : ScaleScreen
     {
         base.Start();
         btnBack.onClick.AddListener(ClickBack);
-        btnDauTap.onClick.AddListener(ClickDauTap);
+        // btnDauTap.onClick.AddListener(ClickDauTap);
+        btnDauTap.onClick.AddListener(() => ClickPvpThuong(1));
         btnPvp1Vip.onClick.AddListener(ClickPhongVip);
 
         btnPvp1.onClick.AddListener(() => ClickPvpThuong(1));

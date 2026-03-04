@@ -2,7 +2,7 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 
-public class CanvasSpawn : MonoBehaviour
+public class CanvasSpawn : ScaleScreen
 {
     public TMP_Text txtTimeSpawn;
 

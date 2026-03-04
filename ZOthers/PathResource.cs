@@ -30,7 +30,7 @@ public class PathResource
     public const string MainGame1 = "MainGame/MainGame1";
     public const string DialogChonPhong = "MainGame/ChonPhong";
     public const string PopupTimTran = "MainGame/TimTran";
-    public const string ChonTuong = "MainGame/ChonTuongNew";
+    public const string ChonTuong = "MainGame/ChonTuong";
 
     public const string RutThuong = "Money/RutThuong";
     public const string NapTien = "Money/NapTien";

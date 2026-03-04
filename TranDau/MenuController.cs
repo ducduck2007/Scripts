@@ -12,6 +12,10 @@ public class MenuController : ScaleScreen
     public JoystickController joystick;
     public TMP_Text txtTime;
 
+    public Image imgKhungTBInMatch;
+    public TMP_Text txtContentTBInMatch;
+    private Coroutine _tbInMatchCo;
+
     [Header("Chat In Match UI")]
     public ScrollRect chatScrollRect;
     public Transform chatContent;
@@ -125,7 +129,6 @@ public class MenuController : ScaleScreen
     private int _lastPingState = -1; // 0=weak,1=mid,2=good
 
     private bool _surrenderSent = false;
-    private bool _exitPopupShowing = false;
 
     protected override void OnEnable()
     {
@@ -1040,12 +1043,12 @@ public class MenuController : ScaleScreen
         txtPing.text = ms + "ms";
 
         int state; // 0=weak,1=mid,2=good
-        if (ms < 50)
+        if (ms < 70)
         {
             state = 2;
             txtPing.color = Color.green;
         }
-        else if (ms <= 120)
+        else if (ms <= 150)
         {
             state = 1;
             txtPing.color = Color.yellow;
@@ -1084,20 +1087,16 @@ public class MenuController : ScaleScreen
     private void OnClickExit()
     {
         if (_surrenderSent) return;
-        if (_exitPopupShowing) return;
-
-        AudioManager.Instance?.AudioClick();
 
         var tb = ThongBaoController.Instance;
-        if (tb == null || tb.PopupTwoButton == null)
+        if (tb == null)
         {
-            // fallback: không có popup thì vẫn surrender
             _surrenderSent = true;
             SendData.SendSurrender();
             return;
         }
 
-        _exitPopupShowing = true;
+        AudioManager.Instance?.AudioClick();
 
         tb.PopupTwoButton.ShowPopupTwoButton(
             title: "Thua trận",
@@ -1107,15 +1106,110 @@ public class MenuController : ScaleScreen
             {
                 if (_surrenderSent) return;
                 _surrenderSent = true;
-                _exitPopupShowing = false;
-
                 SendData.SendSurrender();
             },
             actionExit: () =>
             {
-                _exitPopupShowing = false;
-                // không làm gì thêm
+                // Không cần làm gì
             }
         );
+    }
+
+    public void ShowTBInMatch(int teamId, string content)
+    {
+        if (txtContentTBInMatch != null)
+            txtContentTBInMatch.text = content;
+
+        if (imgKhungTBInMatch != null)
+        {
+            string spritePath = teamId == 1 ? "InGame/khungTBteamxanh" : "InGame/khungTBteamdo";
+            Sprite sp = Resources.Load<Sprite>(spritePath);
+            if (sp != null) imgKhungTBInMatch.sprite = sp;
+        }
+
+        if (imgKhungTBInMatch != null) imgKhungTBInMatch.gameObject.SetActive(true);
+        if (txtContentTBInMatch != null) txtContentTBInMatch.gameObject.SetActive(true);
+
+        if (_tbInMatchCo != null) StopCoroutine(_tbInMatchCo);
+        _tbInMatchCo = StartCoroutine(CoShowTBInMatch());
+    }
+
+    private IEnumerator CoShowTBInMatch()
+    {
+        // --- Fade + Scale IN ---
+        float duration = 0.25f;
+        float t = 0f;
+
+        SetTBInMatchAlpha(0f);
+        SetTBInMatchScale(0.75f);
+
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float progress = Mathf.Clamp01(t / duration);
+            float eased = 1f - Mathf.Pow(1f - progress, 3f); // ease out cubic
+
+            SetTBInMatchAlpha(eased);
+            SetTBInMatchScale(Mathf.LerpUnclamped(0.75f, 1f, eased));
+            yield return null;
+        }
+
+        SetTBInMatchAlpha(1f);
+        SetTBInMatchScale(1f);
+
+        // --- Hiển thị 4 giây ---
+        yield return new WaitForSeconds(4f);
+
+        // --- Fade OUT ---
+        t = 0f;
+        duration = 0.3f;
+
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float progress = Mathf.Clamp01(t / duration);
+            float eased = Mathf.Pow(progress, 2f); // ease in
+
+            SetTBInMatchAlpha(1f - eased);
+            yield return null;
+        }
+
+        SetTBInMatchAlpha(0f);
+        if (imgKhungTBInMatch != null) imgKhungTBInMatch.gameObject.SetActive(false);
+        if (txtContentTBInMatch != null) txtContentTBInMatch.gameObject.SetActive(false);
+
+        _tbInMatchCo = null;
+    }
+
+    private void SetTBInMatchAlpha(float alpha)
+    {
+        if (imgKhungTBInMatch != null)
+        {
+            var c = imgKhungTBInMatch.color;
+            c.a = alpha;
+            imgKhungTBInMatch.color = c;
+        }
+        if (txtContentTBInMatch != null)
+        {
+            var c = txtContentTBInMatch.color;
+            c.a = alpha;
+            txtContentTBInMatch.color = c;
+        }
+    }
+
+    private void SetTBInMatchScale(float scale)
+    {
+        if (imgKhungTBInMatch != null)
+            imgKhungTBInMatch.transform.localScale = Vector3.one * scale;
+    }
+
+    private IEnumerator CoHideTBInMatch()
+    {
+        yield return new WaitForSeconds(4f);
+
+        if (imgKhungTBInMatch != null) imgKhungTBInMatch.gameObject.SetActive(false);
+        if (txtContentTBInMatch != null) txtContentTBInMatch.gameObject.SetActive(false);
+
+        _tbInMatchCo = null;
     }
 }

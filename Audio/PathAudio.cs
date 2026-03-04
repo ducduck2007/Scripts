@@ -16,4 +16,5 @@ public class PathAudio
     public const string Background = "Audio/background";
 
     public const string NormalAttack = "Audio/NormalAttack";
+    public const string MinionAttack = "Sound/combat/BoBinh";
 }

@@ -29,7 +29,7 @@ public class ChonTuong : ScaleScreen
 
     Coroutine _bgCo;
 
-    static readonly Color DARK_COLOR = new Color32(0, 0, 0, 255);
+    static readonly Color DARK_COLOR = new Color32(40, 40, 40, 255);
     static readonly Color NORMAL_COLOR = new Color32(255, 255, 255, 255);
 
     private bool _daDemNguoc;
@@ -79,20 +79,11 @@ public class ChonTuong : ScaleScreen
     {
         base.OnEnable();
 
-        StartCoroutine(CoEnableNextFrame());
-
         if (DialogController.Instance != null && DialogController.Instance.PopupTimTran != null)
             DialogController.Instance.PopupTimTran.Show(false);
 
         ThongBaoController.Instance.PrewarmLoadVaoTran();
         SetData();
-    }
-
-    private IEnumerator CoEnableNextFrame()
-    {
-        yield return null; // chờ 1 frame cho Awake chạy xong
-        if (canvasShowHieuUngUI != null)
-            canvasShowHieuUngUI.gameObject.SetActive(true);
     }
 
     private void OnDisable()
@@ -150,6 +141,10 @@ public class ChonTuong : ScaleScreen
 
     private void OnToggleSelected(int selectedHeroType)
     {
+        // Nếu đang chọn đúng hero hiện tại thì bỏ qua
+        if (heroType == selectedHeroType)
+            return;
+
         AudioManager.Instance.AudioClick();
         heroType = selectedHeroType;
         SelectHero(heroType);
@@ -173,7 +168,23 @@ public class ChonTuong : ScaleScreen
 
         if (tuong[heroIndex] != null && showcase2D != null)
         {
-            showcase2D.PlayFor(tuong[heroIndex].transform);
+            HeroShowcaseProfile profile = null;
+
+            if (showcaseProfiles != null &&
+                heroIndex >= 0 &&
+                heroIndex < showcaseProfiles.Length)
+            {
+                profile = showcaseProfiles[heroIndex];
+            }
+
+            if (profile != null)
+            {
+                showcase2D.PlayFor(tuong[heroIndex].transform, profile);
+            }
+            else
+            {
+                showcase2D.ForceIdle(tuong[heroIndex].transform, true);
+            }
         }
 
         HandleBgColor(heroIndex);
@@ -193,21 +204,19 @@ public class ChonTuong : ScaleScreen
 
     private void SpawnHieuUng(int heroIndex)
     {
+        // Hủy coroutine cũ
         foreach (var co in _hieuUngCos)
         {
             if (co != null) StopCoroutine(co);
         }
         _hieuUngCos.Clear();
 
+        // Hủy hiệu ứng cũ
         foreach (var go in _currentHieuUngs)
         {
             if (go != null) Destroy(go);
         }
         _currentHieuUngs.Clear();
-
-        // ✅ Bật canvas ngay tại đây, không phụ thuộc vào hiệu ứng
-        // if (canvasShowHieuUngUI != null)
-        //     canvasShowHieuUngUI.gameObject.SetActive(true);
 
         if (heroHieuUngs == null || heroIndex < 0 || heroIndex >= heroHieuUngs.Length)
             return;
@@ -234,9 +243,8 @@ public class ChonTuong : ScaleScreen
         if (!gameObject.activeInHierarchy)
             yield break;
 
-        // Bật canvas đúng lúc — sau delay, trước khi spawn hiệu ứng
-        // if (canvasShowHieuUngUI != null)
-        //     canvasShowHieuUngUI.gameObject.SetActive(true);
+        if (canvasShowHieuUngUI != null)
+            canvasShowHieuUngUI.gameObject.SetActive(true);
 
         GameObject go = Instantiate(config.prefab, hieuUngParent);
         go.transform.localPosition = config.position;
@@ -322,7 +330,7 @@ public class ChonTuong : ScaleScreen
     public void StatusBtnChon(bool val)
     {
         if (btnChon) btnChon.interactable = val;
-        if (huBtn) huBtn.SetActive(!val);
+        if (huBtn) huBtn.SetActive(val);
     }
 
     private void KhoaTuong()

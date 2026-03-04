@@ -297,6 +297,15 @@ public class TruLinh : MonoBehaviour
         attackLine?.gameObject.SetActive(false);
         if (phamVi != null) phamVi.SetActive(false);
 
+        // Âm thanh death
+        if (AudioManager.Instance != null)
+        {
+            string soundPath = IsMainTurret
+                ? "Sound/combat/Dinhdoc1"
+                : "Sound/combat/Bangphongxungtran";
+            AudioManager.Instance.PlayOneShotByPath(soundPath);
+        }
+
         Transform t = transform;
 
         DOVirtual.DelayedCall(deathEffectDelay, () =>

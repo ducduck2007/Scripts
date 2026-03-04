@@ -10,11 +10,11 @@ public class PingPongGame : ManualSingleton<PingPongGame>
 
     private int _demMangKhongOnDinh = 0;
     private const int NGUONG_KHONG_ON_DINH = 3;
-    private const int NGUONG_PING_KHONG_ON_DINH = 90;
-    private const int NGUONG_PING_YEU = 190;
+    private const int NGUONG_PING_TOT = 70;       // <70ms: mạng tốt
+    private const int NGUONG_PING_YEU = 150;      // >150ms: mạng yếu, cảnh báo ngay
 
     private float _lastWarningKhongOnDinhTime = -180f;
-    private const float COOLDOWN_WARNING = 180f; // 3 phút
+    private const float COOLDOWN_WARNING = 180f; // 3 phút cho mức không ổn định
 
     public void PingPong()
     {
@@ -54,33 +54,12 @@ public class PingPongGame : ManualSingleton<PingPongGame>
 
                 if (pingTime > NGUONG_PING_YEU)
                 {
-                    B.Instance.DemMangYeu++;
                     _demMangKhongOnDinh = 0;
-
-                    if (B.Instance.DemMangYeu >= 5)
-                    {
-                        ThongBaoController.Instance.PopupOneButton.ShowPopupThongBao(
-                            "Kết nối mạng kém. Bạn vui lòng kiểm tra lại kết nối mạng Wifi/5G."
-                        );
-                        B.Instance.DemMangYeu = 0;
-                    }
-                }
-                else if (pingTime > NGUONG_PING_KHONG_ON_DINH)
-                {
                     B.Instance.DemMangYeu = 0;
-                    _demMangKhongOnDinh++;
 
-                    if (_demMangKhongOnDinh >= NGUONG_KHONG_ON_DINH)
-                    {
-                        if (Time.time - _lastWarningKhongOnDinhTime >= COOLDOWN_WARNING)
-                        {
-                            ThongBaoController.Instance.PopupOneButton.ShowPopupThongBao(
-                                "Mạng không ổn định. Bạn vui lòng kiểm tra lại kết nối."
-                            );
-                            _lastWarningKhongOnDinhTime = Time.time;
-                        }
-                        _demMangKhongOnDinh = 0;
-                    }
+                    ThongBaoController.Instance.PopupOneButton.ShowPopupThongBao(
+                        "Kết nối mạng kém. Bạn vui lòng kiểm tra lại kết nối mạng Wifi/5G."
+                    );
                 }
                 else
                 {
@@ -101,15 +80,11 @@ public class PingPongGame : ManualSingleton<PingPongGame>
                     else if (i == 9)
                     {
                         pingTime = 9999;
-                        B.Instance.DemMangYeu++;
+                        B.Instance.DemMangYeu = 0;
 
-                        if (B.Instance.DemMangYeu >= 5)
-                        {
-                            ThongBaoController.Instance.PopupOneButton.ShowPopupThongBao(
-                                "Kết nối mạng kém. Bạn vui lòng kiểm tra lại kết nối mạng Wifi/5G."
-                            );
-                            B.Instance.DemMangYeu = 0;
-                        }
+                        ThongBaoController.Instance.PopupOneButton.ShowPopupThongBao(
+                            "Kết nối mạng kém. Bạn vui lòng kiểm tra lại kết nối mạng Wifi/5G."
+                        );
 
                         if (!OnOffDialog.Instance.isOnLoadMang)
                             ThongBaoController.Instance.LoadMang.Show();

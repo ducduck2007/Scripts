@@ -7,7 +7,7 @@ public class PopupTimTran : ScaleScreen
 {
     [Header("Buttons")]
     public Button btnBack, btnHome;
-    public Button btnTimTran, btnHuyGhep;
+    public Button btnTimTran, btnHuyGhep, btnChat;
 
     [Header("UI Elements")]
     public TextMeshProUGUI txtIdPhong, txtTimeTim, txtTrangThaiTim;
@@ -36,6 +36,7 @@ public class PopupTimTran : ScaleScreen
         if (btnHome) btnHome.onClick.AddListener(ClickHome);
         if (btnTimTran) btnTimTran.onClick.AddListener(ClickTimTran);
         if (btnHuyGhep) btnHuyGhep.onClick.AddListener(ClickHuyTimTran);
+        if (btnChat) btnChat.onClick.AddListener(ClickChat);
 
         if (MatchFoundDataBase.Instance != null)
         {
@@ -501,5 +502,11 @@ public class PopupTimTran : ScaleScreen
     public void Show(bool val = true)
     {
         gameObject.SetActive(val);
+    }
+
+    private void ClickChat()
+    {
+        AudioManager.Instance.AudioClick();
+        ChatControlController.Instance.DialogChat.Show();
     }
 }
